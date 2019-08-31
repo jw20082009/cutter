@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="basic_RoundImageView">
+        <attr name="borderRadius" />
+        <attr name="type" />
+    </declare-styleable>
+    <attr name="sample_borderRadius" format="dimension" />
+    <attr name="sample_type">
+        <enum name="circle" value="0" />
+        <enum name="round" value="1" />
+    </attr>
+
+    <declare-styleable name="sample_IndicatorView">
+        <!--可见数目-->
+        <attr name="SeeSize" format="integer"></attr>
+        <!--默认文字大小和颜色-->
+        <attr name="TextSize" format="float"></attr>
+        <attr name="TextColor" format="color|reference"></attr>
+        <!--选中大小和颜色-->
+        <attr name="SelectedTextSize" format="float"></attr>
+        <attr name="SelectedTextColor" format="color|reference"></attr>
+    </declare-styleable>
+
+    <declare-styleable name="sample_aspect">
+        <attr name="ratio" format="float" />
+    </declare-styleable>
+
+    <declare-styleable name="sample_CrystalRangeSeekbar" >
+        <attr name="corner_radius" />
+        <attr name="min_value" />
+        <attr name="max_value" />
+        <attr name="min_start_value" />
+        <attr name="max_start_value" />
+        <attr name="steps" />
+        <attr name="gap" />
+        <attr name="fix_gap" />
+        <attr name="bar_height"/>
+        <attr name="bar_color_mode" />
+        <attr name="bar_color" />
+        <attr name="bar_gradient_start" />
+        <attr name="bar_gradient_end" />
+        <attr name="bar_highlight_color_mode" />
+        <attr name="bar_highlight_color" />
+        <attr name="bar_highlight_gradient_start" />
+        <attr name="bar_highlight_gradient_end" />
+        <attr name="thumb_diameter" />
+        <attr name="position" />
+        <attr name="data_type" />
+        <attr name="left_thumb_color" format="color" />
+        <attr name="left_thumb_color_pressed" format="color" />
+        <attr name="left_thumb_image" format="reference" />
+        <attr name="left_thumb_image_pressed" format="reference" />
+        <attr name="right_thumb_color" format="color" />
+        <attr name="right_thumb_color_pressed" format="color" />
+        <attr name="right_thumb_image" format="reference" />
+        <attr name="right_thumb_image_pressed" format="reference" />
+        <attr name="seek_bar_touch_enabled" />
+    </declare-styleable>
+
+</resources>

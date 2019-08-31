@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <dimen name="basic_size_tips">12dp</dimen>
+    <dimen name="basic_size_content">14dp</dimen>
+    <dimen name="basic_size_title">16dp</dimen>
+
+    <dimen name="basic_height_recordbtn">100dp</dimen>
+    <dimen name="basic_thumb_width">20dp</dimen>
+    <dimen name="basic_thumb_height">70dp</dimen>
+
+    <dimen name="basic_videoprogress_height">30dp</dimen>
+</resources>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <View
+        android:id="@+id/sample_aspect_blank1"
+        android:layout_width="15dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@android:color/white" />
+
+    <View
+        android:id="@+id/sample_aspect_rect"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        android:background="@drawable/basic_rect_strokenwhite" />
+
+    <View
+        android:id="@+id/sample_aspect_blank2"
+        android:layout_width="15dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@android:color/white" />
+</merge>

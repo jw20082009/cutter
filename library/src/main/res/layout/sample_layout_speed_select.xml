@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <TextView
+        android:id="@+id/sample_tv_veryslow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/sample_speed_left"
+        android:paddingLeft="15dp"
+        android:paddingTop="10dp"
+        android:paddingRight="10dp"
+        android:paddingBottom="10dp"
+        android:text="极慢"
+        android:textColor="@color/sample_speed_selector"
+        android:textSize="@dimen/basic_size_content" />
+
+    <TextView
+        android:id="@+id/sample_tv_slow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/sample_speed_center"
+        android:padding="10dp"
+        android:text="慢速"
+        android:textColor="@color/sample_speed_selector"
+        android:textSize="@dimen/basic_size_content" />
+
+    <TextView
+        android:id="@+id/sample_tv_normal"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/sample_speed_center"
+        android:padding="10dp"
+        android:text="标准"
+        android:textColor="@color/sample_speed_selector"
+        android:textSize="@dimen/basic_size_content" />
+
+    <TextView
+        android:id="@+id/sample_tv_fast"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/sample_speed_center"
+        android:padding="10dp"
+        android:text="快速"
+        android:textColor="@color/sample_speed_selector"
+        android:textSize="@dimen/basic_size_content" />
+
+    <TextView
+        android:id="@+id/sample_tv_veryfast"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/sample_speed_right"
+        android:paddingLeft="10dp"
+        android:paddingTop="10dp"
+        android:paddingRight="15dp"
+        android:paddingBottom="10dp"
+        android:text="极快"
+        android:textColor="@color/sample_speed_selector"
+        android:textSize="@dimen/basic_size_content" />
+</merge>

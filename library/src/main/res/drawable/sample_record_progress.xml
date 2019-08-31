@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 总进度的颜色 -->
+    <item android:id="@android:id/background">
+        <shape>
+            <solid android:color="@color/basic_color_tips_bg" />
+        </shape>
+    </item>
+    <!-- 缓存的颜色 -->
+    <item android:id="@android:id/secondaryProgress">
+        <clip>
+            <shape>
+                <!--<gradient-->
+                <!--android:endColor="#ffc93a"-->
+                <!--android:startColor="#ff9f00"></gradient>-->
+                <solid android:color="@color/basic_secondaryProgressBar" />
+            </shape>
+        </clip>
+    </item>
+
+    <!-- 当前进度的颜色 -->
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape>
+                <!--<gradient-->
+                <!--android:endColor="#ffc93a"-->
+                <!--android:startColor="#ff9f00"></gradient>-->
+                <solid android:color="@color/basic_progressBar" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

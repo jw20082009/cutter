@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="basic_color_confirm">#F08080</color>
+    <color name="basic_color_tips_bg">#66000000</color>
+    <color name="basic_progressBar">#F08080</color>
+    <color name="basic_progressBar2">#66F08080</color>
+    <color name="basic_progressBar3">#99F08080</color>
+    <color name="basic_secondaryProgressBar">#CD3700</color>
+</resources>

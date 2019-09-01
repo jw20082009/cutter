@@ -20,17 +20,25 @@ android {
             abiFilters 'armeabi-v7a'
         }
     }
+    signingConfigs {
+        releasesign
+    }
+
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.releasesign
         }
     }
     externalNativeBuild {
         cmake {
             path "CMakeLists.txt"
         }
+    }
+    lintOptions {
+        abortOnError false
     }
 }
 
@@ -41,4 +49,32 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:0.5'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:2.2.2'
+}
+
+File signFile = file(System.getenv('HOME') + "/.android/sign.properties")
+if (signFile.canRead()) {
+    Properties p = new Properties()
+    p.load(new FileInputStream(signFile))
+
+    if (p != null
+            && p.containsKey('key.store')
+            && p.containsKey('key.store.password')
+            && p.containsKey('key.alias')
+            && p.containsKey('key.alias.password')
+    ) {
+        println "RELEASE_BUILD: Signing..."
+        android.signingConfigs.releasesign.storeFile = file(p['key.store'])
+        android.signingConfigs.releasesign.storePassword = p['key.store.password']
+        android.signingConfigs.releasesign.keyAlias = p['key.alias']
+        android.signingConfigs.releasesign.keyPassword = p['key.alias.password']
+    } else {
+        println "RELEASE_BUILD: Required properties in signing.properties are missing"
+        android.buildTypes.release.signingConfig = null
+    }
+} else {
+    println "RELEASE_BUILD: signing.properties not found"
+    android.signingConfigs.releasesign.storeFile = file("${rootDir}/demoRelease.keystore")
+    android.signingConfigs.releasesign.storePassword = "123456"
+    android.signingConfigs.releasesign.keyAlias = "svkit"
+    android.signingConfigs.releasesign.keyPassword = "123456"
 }

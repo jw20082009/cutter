@@ -66,18 +66,16 @@
 -keep class com.sensetime.stmobile.* { *;}
 -keep class com.sensetime.stmobile.model.* { *;}
 
-# mp4parser相关
--keep public class com.mp4parser.** {*;}
--keep public class org.mp4parser.** {*;}
--keep public class com.coremedia.** {*;}
--keep public class com.googlecode.** {*;}
-
 -keep public class com.wilbert.library.basic.** { *; }
--keep public class com.wilbert.library.sample.camera.FileUtils {*;}
+-keep public class com.wilbert.library.camera.FileUtils {*;}
 -keep public class com.wilbert.library.videomerge.VideoEncode {*;}
 -keep public interface com.wilbert.library.videomerge.VideoEncode$OnVideoEncodeListener {*;}
 -keep public class com.wilbert.library.videoprocessor.VideoProcessor {*;}
 -keep public interface com.wilbert.library.videoprocessor.util.VideoProgressListener {*;}
 -keep public class com.wilbert.library.videoprocessor.VideoProcessor$Processor {*;}
--keep public class com.wilbert.library.sample.camera.BaseCameraFragment {*;}
--keep public class com.wilbert.library.sample.camera.BaseCameraFragment$LocalVideoEntity {*;}
+-keep public class com.wilbert.library.camera.BaseCameraFragment {*;}
+-keep public class com.wilbert.library.camera.BaseCameraFragment$LocalVideoEntity {*;}
+-keep public class com.hyq.hm.lame.SimpleLame {*;}
+-keepclassmembers public class com.wilbert.library.videomerge.AudioDecoder {
+    public void setProgress(long, long, int);
+}

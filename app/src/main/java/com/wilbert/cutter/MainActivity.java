@@ -16,6 +16,7 @@ import android.widget.Toast;
 
 import com.wilbert.cutter.bgm.BgmActivity;
 import com.wilbert.cutter.cut.VideoEditActivity;
+import com.wilbert.cutter.edit.EditActivity;
 import com.wilbert.cutter.merge.MergeActivity;
 import com.wilbert.library.basic.utils.FileUtils;
 
@@ -158,7 +159,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         File file = new File(path);
                         if (file.exists()) {
                             Log.i(TAG, path);
-                            startActivity(VideoEditActivity.createIntent(this, path, 1));
+                            startActivity(EditActivity.createIntent(this, path, 1));
                         }
                     }
                 }

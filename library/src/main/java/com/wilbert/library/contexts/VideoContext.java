@@ -1,5 +1,6 @@
 package com.wilbert.library.contexts;
 
+import android.opengl.GLSurfaceView;
 import android.view.Surface;
 
 import com.wilbert.library.codecs.ISurfaceObtainer;
@@ -11,8 +12,15 @@ import com.wilbert.library.codecs.ISurfaceObtainer;
  * desc   :
  */
 public class VideoContext implements ISurfaceObtainer {
+
+    GLSurfaceView mSurfaceView;
+
+    public VideoContext(GLSurfaceView surfaceView) {
+        mSurfaceView = surfaceView;
+    }
+
     @Override
     public Surface getSurface() {
-        return null;
+        return mSurfaceView.getHolder().getSurface();
     }
 }

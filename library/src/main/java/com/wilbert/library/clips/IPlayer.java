@@ -1,5 +1,7 @@
 package com.wilbert.library.clips;
 
+import android.view.Surface;
+
 import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -18,7 +20,7 @@ public interface IPlayer {
 
     void setPlayerListener(IPlayerListener listener);
 
-    void prepare();
+    void prepare(Surface surface);
 
     void start();
 

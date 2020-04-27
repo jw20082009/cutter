@@ -11,6 +11,9 @@ import java.nio.ByteBuffer;
 public class InputInfo {
     public int inputIndex;
     public ByteBuffer buffer;
+    public int size = 0;
+    public long time = 0;
+    public boolean lastFrameFlag = false;
 
     public InputInfo(int inputIndex, ByteBuffer buffer) {
         this.inputIndex = inputIndex;

@@ -21,8 +21,8 @@ import static android.media.MediaCodecList.REGULAR_CODECS;
 public class VideoDecoder {
     private final String TAG = "VideoDecoder";
     private MediaCodec mDecoder;
-    private ISurfaceObtainer mObtainer;
     private boolean mPrepared = false;
+    private Surface mSurface;
     private MediaFormat mInputFormat;
     private MediaFormat mOutputFormat;
     private MediaCodec.Callback mOutCallback;
@@ -38,18 +38,6 @@ public class VideoDecoder {
     public VideoDecoder() {
     }
 
-    public void setSurfaceObtainer(ISurfaceObtainer obtainer) {
-        this.mObtainer = obtainer;
-    }
-
-    public boolean prepare(MediaFormat format) throws IOException {
-        if (mPrepared && mDecoder != null) {
-            return true;
-        }
-        Surface surface = obtainSurface();
-        return prepare(format, surface);
-    }
-
     public boolean prepare(MediaFormat format, Surface surface) throws IOException {
         if (mPrepared && mDecoder != null) {
             return true;
@@ -57,6 +45,7 @@ public class VideoDecoder {
         if (format == null) {
             return false;
         }
+        mSurface = surface;
         mInputFormat = format;
         MediaCodecList codecList = new MediaCodecList(REGULAR_CODECS);
         String codecName = codecList.findDecoderForFormat(mInputFormat);
@@ -96,14 +85,11 @@ public class VideoDecoder {
         }
     }
 
-    private Surface obtainSurface() {
-        if (mObtainer != null) {
-            Surface surface = mObtainer.getSurface();
-            if (surface != null && surface.isValid()) {
-                return surface;
-            }
+    public void queueInput(InputInfo inputInfo) {
+        if (mPrepared && inputInfo != null) {
+            mDecoder.queueInputBuffer(inputInfo.inputIndex, 0, inputInfo.size, inputInfo.time,
+                    inputInfo.lastFrameFlag ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
         }
-        return null;
     }
 
     private MediaCodec.Callback mCallback = new MediaCodec.Callback() {
@@ -126,7 +112,7 @@ public class VideoDecoder {
         @Override
         public void onError(@NonNull MediaCodec codec, @NonNull MediaCodec.CodecException e) {
             ALog.e(TAG, "onError", e);
-            Surface surface = obtainSurface();
+            Surface surface = mSurface;
             if (surface != null) {
                 mDecoder.reset();
                 mDecoder.configure(mInputFormat, surface, null, 0);

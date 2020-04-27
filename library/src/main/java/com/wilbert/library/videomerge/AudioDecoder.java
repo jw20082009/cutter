@@ -1,7 +1,5 @@
 package com.wilbert.library.videomerge;
 
-import com.hyq.hm.lame.SimpleLame;
-
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaExtractor;
@@ -179,11 +177,11 @@ public class AudioDecoder {
             //将音频解码成pcm文件
             decoderPCM(i,holder,pcm);
             //把pcm文件转成mp3
-            SimpleLame.convert(this,i,pcm,mp3
-                    ,holder.getSampleRate(),
-                    channelCount,sampleRate,bitRate,
-                    1
-            );
+//            SimpleLame.convert(this,i,pcm,mp3
+//                    ,holder.getSampleRate(),
+//                    channelCount,sampleRate,bitRate,
+//                    1
+//            );
             mp3s.add(mp3);
         }
         File f = new File(pcm);

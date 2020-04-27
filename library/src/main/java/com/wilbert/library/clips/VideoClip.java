@@ -1,25 +1,19 @@
 package com.wilbert.library.clips;
 
-import android.media.MediaCodec;
 import android.media.MediaFormat;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Looper;
-import android.os.Message;
 import android.support.annotation.NonNull;
+import android.text.TextUtils;
+import android.view.Surface;
 
+import com.wilbert.library.codecs.IDecodeListener;
+import com.wilbert.library.codecs.IExtractorListener;
 import com.wilbert.library.codecs.InputInfo;
-import com.wilbert.library.codecs.OutputInfo;
-import com.wilbert.library.codecs.VideoDecoder;
+import com.wilbert.library.codecs.VideoDecoderWrapper;
 import com.wilbert.library.codecs.VideoExtractor;
-import com.wilbert.library.contexts.VideoContext;
-import com.wilbert.library.log.ALog;
+import com.wilbert.library.codecs.VideoExtractorWrapper;
 
 import java.io.FileDescriptor;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.concurrent.LinkedBlockingDeque;
 
 /**
  * author : Administrator
@@ -29,24 +23,23 @@ import java.util.concurrent.LinkedBlockingDeque;
  */
 public class VideoClip implements IPlayer {
     private final String TAG = "VideoClip" + hashCode();
-    private VideoContext mContext;
-    private VideoDecoder mDecoder;
-    private VideoExtractor mExtractor;
-    private ClipHandler mHandler;
+    private VideoExtractorWrapper mExtractor;
+    private VideoDecoderWrapper mDecoder;
     private FileDescriptor mDescriptor;
     private IPlayerListener mListener;
     private boolean mPrepared = false;
     private Object mLock = new Object();
-    private LinkedBlockingDeque<InputInfo> mInputInfos = new LinkedBlockingDeque<>();
-    private LinkedBlockingDeque<OutputInfo> mOutputInfos = new LinkedBlockingDeque<>();
+    private String mFilePath = null;
+    private Surface mSurface;
 
-    public VideoClip(VideoContext context) {
-        mContext = context;
+    public VideoClip() {
     }
 
     @Override
     public void setDataSource(String filepath) throws IOException {
-        setDataSource(new FileOutputStream(filepath).getFD());
+        synchronized (mLock) {
+            mFilePath = filepath;
+        }
     }
 
     @Override
@@ -64,14 +57,15 @@ public class VideoClip implements IPlayer {
     }
 
     @Override
-    public void prepare() {
+    public void prepare(Surface surface) {
         synchronized (mLock) {
-            if (mDescriptor == null) {
+            if (TextUtils.isEmpty(mFilePath) && mDescriptor == null) {
                 return;
             }
-            _initHandler();
-            mHandler.removeMessages(MSG_PREPARE);
-            mHandler.sendEmptyMessage(MSG_PREPARE);
+            mSurface = surface;
+            mExtractor = new VideoExtractorWrapper();
+            mExtractor.setListener(extractorListener);
+            mExtractor.prepare(mFilePath, VideoExtractor.Type.VIDEO);
         }
     }
 
@@ -102,73 +96,15 @@ public class VideoClip implements IPlayer {
 
     @Override
     public void release() {
-
-    }
-
-    private boolean _prepareExtractor() {
-        boolean prepared = false;
-        if (mExtractor != null) {
-            mExtractor.release();
-        }
-        try {
-            mExtractor = new VideoExtractor();
-            mExtractor.prepare(mDescriptor, VideoExtractor.Type.VIDEO);
-            prepared = true;
-        } catch (IOException e) {
-            e.printStackTrace();
-            synchronized (mLock) {
-                if (mListener != null) {
-                    mListener.onError(VideoClip.this, e);
-                }
-            }
-            prepared = false;
-        } finally {
-            if (!prepared && mExtractor != null) {
+        synchronized (mLock) {
+            if (mExtractor != null) {
                 mExtractor.release();
                 mExtractor = null;
             }
-        }
-        return prepared;
-    }
-
-    private boolean _prepareDecoder() {
-        boolean prepared = false;
-        if (mDecoder != null) {
-            mDecoder.release();
-        }
-        if (mExtractor.isPrepared()) {
-            try {
-                mDecoder = new VideoDecoder();
-                mDecoder.setCallback(mDecodeCallback);
-                mDecoder.prepare(mExtractor.getMediaFormat(), mContext.getSurface());
-                prepared = true;
-            } catch (IOException e) {
-                e.printStackTrace();
-                synchronized (mLock) {
-                    if (mListener != null) {
-                        mListener.onError(VideoClip.this, e);
-                    }
-                }
-                prepared = false;
-            } finally {
-                if (!prepared && mDecoder != null) {
-                    mDecoder.release();
-                    mDecoder = null;
-                }
+            if (mDecoder != null) {
+                mDecoder.release();
+                mDecoder = null;
             }
-        }
-        return prepared;
-    }
-
-    private void _release() {
-
-    }
-
-    private void _initHandler() {
-        if (mHandler == null) {
-            HandlerThread thread = new HandlerThread(toString());
-            thread.start();
-            mHandler = new ClipHandler(thread.getLooper());
         }
     }
 
@@ -178,62 +114,61 @@ public class VideoClip implements IPlayer {
         return "VideoClip[" + hashCode() + "]";
     }
 
-    private final int MSG_PREPARE = 0x01;
-
-    class ClipHandler extends Handler {
-        public ClipHandler(Looper looper) {
-            super(looper);
+    public IExtractorListener extractorListener = new IExtractorListener() {
+        @Override
+        public void onInputBufferAvailable(InputInfo inputInfo) {
+            mDecoder.queueInput(inputInfo);
         }
 
         @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            switch (msg.what) {
-                case MSG_PREPARE:
-                    if (mContext == null) {
-                        ALog.e(TAG, "MSG_PREPARE & mContext == null");
-                        break;
+        public void onPrepared(VideoExtractorWrapper extractor) {
+            synchronized (mLock) {
+                if (mDecoder == null && extractor != null) {
+                    MediaFormat format = extractor.getMediaFormat();
+                    if (format != null) {
+                        mDecoder = new VideoDecoderWrapper();
+                        mDecoder.setListener(decodeListener);
+                        mDecoder.prepare(format, mSurface);
                     }
-                    boolean extractorPrepared = _prepareExtractor();
-                    boolean decoderPrepared = _prepareDecoder();
-                    if (extractorPrepared && decoderPrepared) {
-                        mPrepared = true;
-                    }
-                    break;
+                }
             }
         }
 
-        public void release() {
-            post(new Runnable() {
-                @Override
-                public void run() {
-                    _release();
-                    getLooper().quit();
-                }
-            });
-        }
-    }
-
-    public MediaCodec.Callback mDecodeCallback = new MediaCodec.Callback() {
         @Override
-        public void onInputBufferAvailable(@NonNull MediaCodec codec, int index) {
-            mInputInfos.offerLast(new InputInfo(index, codec.getInputBuffer(index)));
-            mExtractor.fillBuffer()
+        public void onRelease(VideoExtractorWrapper extractor) {
         }
 
         @Override
-        public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
-
-        }
-
-        @Override
-        public void onError(@NonNull MediaCodec codec, @NonNull MediaCodec.CodecException e) {
-
-        }
-
-        @Override
-        public void onOutputFormatChanged(@NonNull MediaCodec codec, @NonNull MediaFormat format) {
+        public void onError(VideoExtractorWrapper extractor, Throwable throwable) {
 
         }
     };
+
+    public IDecodeListener decodeListener = new IDecodeListener() {
+        @Override
+        public void onInputBufferAvailable(InputInfo inputInfo) {
+            synchronized (mLock) {
+                if (mExtractor == null || inputInfo == null) {
+                    return;
+                }
+            }
+            mExtractor.offerBuffer(inputInfo);
+        }
+
+        @Override
+        public void onPrepared(VideoDecoderWrapper decoder) {
+            mPrepared = true;
+        }
+
+        @Override
+        public void onReleasing(VideoDecoderWrapper decoder) {
+
+        }
+
+        @Override
+        public void onError(VideoDecoderWrapper decoder, Throwable throwable) {
+
+        }
+    };
+
 }

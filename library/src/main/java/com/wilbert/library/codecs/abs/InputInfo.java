@@ -1,4 +1,4 @@
-package com.wilbert.library.codecs;
+package com.wilbert.library.codecs.abs;
 
 import java.nio.ByteBuffer;
 

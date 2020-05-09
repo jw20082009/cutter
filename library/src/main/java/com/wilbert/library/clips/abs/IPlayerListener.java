@@ -1,4 +1,6 @@
-package com.wilbert.library.clips;
+package com.wilbert.library.clips.abs;
+
+import com.wilbert.library.clips.abs.IPlayer;
 
 /**
  * author : Administrator

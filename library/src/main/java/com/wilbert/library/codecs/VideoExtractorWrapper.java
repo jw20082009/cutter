@@ -7,13 +7,14 @@ import android.os.Looper;
 import android.os.Message;
 import android.text.TextUtils;
 
-import com.wilbert.library.log.ALog;
+import com.wilbert.library.codecs.abs.IDecoder;
+import com.wilbert.library.codecs.abs.IExtractor;
+import com.wilbert.library.codecs.abs.IExtractorListener;
+import com.wilbert.library.codecs.abs.InputInfo;
+import com.wilbert.library.codecs.abs.FrameInfo;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
-import java.util.LinkedList;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.TimeUnit;
 
 /**
  * author : wilbert
@@ -21,7 +22,7 @@ import java.util.concurrent.TimeUnit;
  * time   : 2020/04/26
  * desc   :
  */
-public class VideoExtractorWrapper {
+public class VideoExtractorWrapper implements IExtractor {
     private final String TAG = "ExtractorWrapper";
     private VideoExtractor mExtractor;
     private ExtractorHandler mHandler;
@@ -30,12 +31,13 @@ public class VideoExtractorWrapper {
     private String mFilePath = null;
     private boolean mPrepared = false;
     private boolean mReleasing = false;
+    private IDecoder mDecoder;
     private Object mLock = new Object();
-    private LinkedBlockingDeque<InputInfo> mInputBuffers = new LinkedBlockingDeque<>(5);
 
     public VideoExtractorWrapper() {
     }
 
+    @Override
     public void prepare(String filePath, VideoExtractor.Type type) {
         synchronized (mLock) {
             initHandler();
@@ -47,6 +49,7 @@ public class VideoExtractorWrapper {
         }
     }
 
+    @Override
     public void prepare(FileDescriptor descriptor, VideoExtractor.Type type) {
         synchronized (mLock) {
             initHandler();
@@ -58,28 +61,22 @@ public class VideoExtractorWrapper {
         }
     }
 
-    public void offerBuffer(InputInfo inputInfo) {
-        if (inputInfo == null) {
-            return;
-        }
-        mInputBuffers.offerLast(inputInfo);
-        ALog.i(TAG, "offerBuffer:" + mInputBuffers.size());
+    @Override
+    public FrameInfo getNextFrameBuffer() {
         synchronized (mLock) {
-            if (!mPrepared) {
-                return;
-            }
-            mHandler.removeMessages(MSG_FEED_BUFFER);
-            mHandler.sendEmptyMessage(MSG_FEED_BUFFER);
+            if (!mPrepared)
+                return null;
+            return mDecoder.dequeueOutputBuffer();
         }
     }
 
+    @Override
     public void seekTo(long timeUs) {
         synchronized (mLock) {
             if (!mPrepared) {
                 return;
             }
             mHandler.removeMessages(MSG_FEED_BUFFER);
-            mInputBuffers.clear();
             mHandler.removeMessages(MSG_SEEK);
             Message seekMessage = mHandler.obtainMessage(MSG_SEEK);
             seekMessage.obj = timeUs;
@@ -89,6 +86,7 @@ public class VideoExtractorWrapper {
         }
     }
 
+    @Override
     public MediaFormat getMediaFormat() {
         synchronized (mLock) {
             if (mPrepared) {
@@ -98,10 +96,12 @@ public class VideoExtractorWrapper {
         return null;
     }
 
+    @Override
     public void setListener(IExtractorListener listener) {
         this.mListener = listener;
     }
 
+    @Override
     public void release() {
         synchronized (mLock) {
             mReleasing = true;
@@ -118,12 +118,14 @@ public class VideoExtractorWrapper {
     }
 
     private void _release() {
-        if (mInputBuffers != null) {
-            mInputBuffers.clear();
-        }
         if (mExtractor != null) {
             mExtractor.release();
             mExtractor = null;
+        }
+        mPrepared = false;
+        if (mDecoder != null) {
+            mDecoder.release();
+            mDecoder = null;
         }
         mReleasing = false;
     }
@@ -148,11 +150,13 @@ public class VideoExtractorWrapper {
                     }
                     try {
                         mExtractor = new VideoExtractor();
+                        mDecoder = new VideoDecoder();
                         if (!TextUtils.isEmpty(mFilePath)) {
                             mExtractor.prepare(mFilePath, (VideoExtractor.Type) msg.obj);
                         } else {
                             mExtractor.prepare(mDescriptor, (VideoExtractor.Type) msg.obj);
                         }
+                        mDecoder.prepare(mExtractor.getMediaFormat());
                         mPrepared = true;
                         if (mListener != null) {
                             mListener.onPrepared(VideoExtractorWrapper.this);
@@ -167,37 +171,36 @@ public class VideoExtractorWrapper {
                         if (!mPrepared && mExtractor != null) {
                             mExtractor.release();
                             mExtractor = null;
+                            mPrepared = false;
+                            if (mListener != null) {
+                                mListener.onReleased(VideoExtractorWrapper.this);
+                            }
                         }
                     }
                     break;
                 case MSG_FEED_BUFFER:
                     if (!mPrepared)
                         break;
-                    try {
-                        InputInfo inputInfo = mInputBuffers.pollFirst(10, TimeUnit.MILLISECONDS);
-                        if (inputInfo != null && inputInfo.buffer != null) {
-                            long time = mExtractor.fillBuffer(inputInfo);
-                            inputInfo.lastFrameFlag = time == -1 ? true : false;
-                            synchronized (mLock) {
-                                if (mListener != null) {
-                                    mListener.onInputBufferAvailable(inputInfo);
-                                }
-                            }
-                        }
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
+                    InputInfo inputInfo = mDecoder.dequeueInputBuffer();
+                    if (inputInfo != null && inputInfo.buffer != null) {
+                        long time = mExtractor.fillBuffer(inputInfo);
+                        inputInfo.lastFrameFlag = time == -1 ? true : false;
                     }
-                    if (!mReleasing && !mInputBuffers.isEmpty()) {
+                    if (!mReleasing) {
                         sendEmptyMessage(MSG_FEED_BUFFER);
                     }
                     break;
                 case MSG_SEEK: {
+                    if (!mPrepared) {
+                        break;
+                    }
                     Object tag = msg.obj;
                     long seekTimeUs = 0;
                     if (tag != null) {
                         seekTimeUs = (long) tag;
                     }
                     mExtractor.seekTo(seekTimeUs);
+                    mDecoder.flush();
                 }
                 break;
             }

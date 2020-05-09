@@ -3,15 +3,15 @@ package com.wilbert.cutter.edit;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.SurfaceTexture;
-import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Surface;
 import android.widget.TextView;
 
 import com.wilbert.cutter.R;
+import com.wilbert.library.basic.renderer.OesRenderer;
 import com.wilbert.library.clips.VideoClip;
 import com.wilbert.library.contexts.VideoContext;
 import com.wilbert.library.frameprocessor.gles.GLImageFilter;
@@ -21,7 +21,6 @@ import java.io.IOException;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
-import javax.microedition.khronos.opengles.GL10Ext;
 
 public class EditActivity extends AppCompatActivity {
     final String TAG = "EditActivity";
@@ -32,7 +31,7 @@ public class EditActivity extends AppCompatActivity {
     int textureId = OpenGLUtils.GL_NOT_TEXTURE;
     Surface mSurface;
     SurfaceTexture mSurfaceTexture;
-    GLImageFilter mImageFilter;
+    OesRenderer mRenderer;
 
     public static Intent createIntent(Context context, String filepath, int simpleCompress) {
         Intent intent = new Intent(context, EditActivity.class);
@@ -47,6 +46,8 @@ public class EditActivity extends AppCompatActivity {
         setContentView(R.layout.activity_edit);
         mSurfaceView = (GLSurfaceView) findViewById(R.id.gl_surfaceview);
         mSurfaceView.setEGLContextClientVersion(2);
+        mRenderer = new OesRenderer(mSurfaceView);
+        mRenderer.setTextureListener(mTextureListener);
         mSurfaceView.setRenderer(mRenderer);
         mSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         mTipsView = findViewById(R.id.tips);
@@ -71,29 +72,6 @@ public class EditActivity extends AppCompatActivity {
         mSurfaceView.onPause();
     }
 
-    GLSurfaceView.Renderer mRenderer = new GLSurfaceView.Renderer() {
-        @Override
-        public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-            Log.i(TAG, "onSurfaceCreated");
-            initTextureId();
-//            GLES20.glClearColor(0.0f, 1.0f, 0f, 1.0f);
-//            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-        }
-
-        @Override
-        public void onSurfaceChanged(GL10 gl, int width, int height) {
-            Log.i(TAG, "onSurfaceChanged:" + width + "*" + height);
-        }
-
-        @Override
-        public void onDrawFrame(GL10 gl) {
-            mSurfaceTexture.updateTexImage();
-            Log.i(TAG, "onDrawFrame");
-//            GLES20.glClearColor(1.0f, 0f, 0f, 1.0f);
-//            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-        }
-    };
-
     private void initTextureId() {
         if (textureId == OpenGLUtils.GL_NOT_TEXTURE) {
 //            mImageFilter = new GLImageFilter(EditActivity.this);
@@ -111,6 +89,16 @@ public class EditActivity extends AppCompatActivity {
         public void onFrameAvailable(SurfaceTexture surfaceTexture) {
             Log.i(TAG, "onFrameAvailable");
             mSurfaceView.requestRender();
+        }
+    };
+
+    protected OesRenderer.TextureListener mTextureListener = new OesRenderer.TextureListener() {
+        @Override
+        public void onSurfaceTextureCreated(SurfaceTexture surfaceTexture) {
+            mSurfaceTexture = surfaceTexture;
+            if (mHasPlayerPrepared) {
+                setMediaPlayerDisplay();
+            }
         }
     };
 }

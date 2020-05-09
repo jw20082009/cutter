@@ -4,12 +4,11 @@ import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.text.TextUtils;
 
+import com.wilbert.library.codecs.abs.InputInfo;
 import com.wilbert.library.log.ALog;
 
 import java.io.FileDescriptor;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 
 /**
  * author : Wilbert

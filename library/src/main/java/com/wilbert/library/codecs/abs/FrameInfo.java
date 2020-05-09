@@ -1,4 +1,4 @@
-package com.wilbert.library.codecs;
+package com.wilbert.library.codecs.abs;
 
 import android.media.MediaCodec;
 
@@ -10,13 +10,15 @@ import java.nio.ByteBuffer;
  * time   : 2020/04/26
  * desc   :
  */
-public class OutputInfo {
+public class FrameInfo {
 
     public int outputIndex;
+    public ByteBuffer outputBuffer;
     public MediaCodec.BufferInfo bufferInfo;
 
-    public OutputInfo(int outIndex, MediaCodec.BufferInfo info) {
+    public FrameInfo(int outIndex, ByteBuffer buffer, MediaCodec.BufferInfo info) {
         this.outputIndex = outIndex;
+        this.outputBuffer = buffer;
         this.bufferInfo = info;
     }
 }

@@ -1,4 +1,6 @@
-package com.wilbert.library.codecs;
+package com.wilbert.library.codecs.abs;
+
+import com.wilbert.library.codecs.VideoExtractorWrapper;
 
 /**
  * author : wilbert
@@ -7,11 +9,10 @@ package com.wilbert.library.codecs;
  * desc   :
  */
 public interface IExtractorListener {
-    void onInputBufferAvailable(InputInfo inputInfo);
 
     void onPrepared(VideoExtractorWrapper extractor);
 
-    void onRelease(VideoExtractorWrapper extractor);
+    void onReleased(VideoExtractorWrapper extractor);
 
     void onError(VideoExtractorWrapper extractor, Throwable throwable);
 }

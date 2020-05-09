@@ -1,9 +1,8 @@
-package com.wilbert.library.clips;
+package com.wilbert.library.clips.abs;
 
 import android.view.Surface;
 
 import java.io.FileDescriptor;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 
 /**

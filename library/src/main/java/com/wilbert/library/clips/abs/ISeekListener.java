@@ -1,4 +1,4 @@
-package com.wilbert.library.clips;
+package com.wilbert.library.clips.abs;
 
 /**
  * author : Administrator

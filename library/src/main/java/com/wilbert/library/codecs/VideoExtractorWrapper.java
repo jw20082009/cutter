@@ -25,6 +25,7 @@ import java.io.IOException;
 public class VideoExtractorWrapper implements IExtractor {
     private final String TAG = "ExtractorWrapper";
     private VideoExtractor mExtractor;
+    private MediaFormat mFormat;
     private ExtractorHandler mHandler;
     private FileDescriptor mDescriptor;
     private IExtractorListener mListener;
@@ -32,6 +33,9 @@ public class VideoExtractorWrapper implements IExtractor {
     private boolean mPrepared = false;
     private boolean mReleasing = false;
     private IDecoder mDecoder;
+    private int mWidth = 0;
+    private int mHeight = 0;
+    private int mRotation = 0;
     private Object mLock = new Object();
 
     public VideoExtractorWrapper() {
@@ -66,7 +70,25 @@ public class VideoExtractorWrapper implements IExtractor {
         synchronized (mLock) {
             if (!mPrepared)
                 return null;
-            return mDecoder.dequeueOutputBuffer();
+            FrameInfo frameInfo = mDecoder.dequeueOutputBuffer();
+            if (frameInfo != null) {
+                frameInfo.frameWidth = 864;
+                frameInfo.frameHeight = mHeight;
+                frameInfo.rotation = mRotation;
+            }
+            if (!mHandler.hasMessages(MSG_FEED_BUFFER)) {
+                mHandler.sendEmptyMessage(MSG_FEED_BUFFER);
+            }
+            return frameInfo;
+        }
+    }
+
+    @Override
+    public void releaseFrameBuffer(FrameInfo frameInfo) {
+        synchronized (mLock) {
+            if (!mPrepared || frameInfo == null)
+                return;
+            mDecoder.queueOutputBuffer(frameInfo);
         }
     }
 
@@ -90,7 +112,7 @@ public class VideoExtractorWrapper implements IExtractor {
     public MediaFormat getMediaFormat() {
         synchronized (mLock) {
             if (mPrepared) {
-                return mExtractor.getMediaFormat();
+                return mFormat;
             }
         }
         return null;
@@ -156,7 +178,15 @@ public class VideoExtractorWrapper implements IExtractor {
                         } else {
                             mExtractor.prepare(mDescriptor, (VideoExtractor.Type) msg.obj);
                         }
-                        mDecoder.prepare(mExtractor.getMediaFormat());
+                        try {
+                            mFormat = mExtractor.getMediaFormat();
+                            mWidth = mFormat.getInteger(MediaFormat.KEY_WIDTH);
+                            mHeight = mFormat.getInteger(MediaFormat.KEY_HEIGHT);
+                            mRotation = mFormat.getInteger(MediaFormat.KEY_ROTATION);
+                            mDecoder.prepare(mFormat);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                         mPrepared = true;
                         if (mListener != null) {
                             mListener.onPrepared(VideoExtractorWrapper.this);
@@ -185,6 +215,7 @@ public class VideoExtractorWrapper implements IExtractor {
                     if (inputInfo != null && inputInfo.buffer != null) {
                         long time = mExtractor.fillBuffer(inputInfo);
                         inputInfo.lastFrameFlag = time == -1 ? true : false;
+                        mDecoder.queueInputBuffer(inputInfo);
                     }
                     if (!mReleasing) {
                         sendEmptyMessage(MSG_FEED_BUFFER);

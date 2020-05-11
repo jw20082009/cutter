@@ -90,7 +90,7 @@ public class VideoDecoder implements IDecoder {
 
     @Override
     public InputInfo dequeueInputBuffer() {
-        if (mDecoder == null || mInputBuffers.isEmpty()) {
+        if (mDecoder == null) {
             return null;
         }
         mCurrentInputInfo = mInputBuffers.pollLast();
@@ -101,13 +101,20 @@ public class VideoDecoder implements IDecoder {
     public void queueInputBuffer(InputInfo inputInfo) {
         if (mDecoder != null && inputInfo != null) {
             mDecoder.queueInputBuffer(inputInfo.inputIndex, 0, inputInfo.size, inputInfo.time, inputInfo.lastFrameFlag ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
+            if (mCurrentInputInfo != null && mCurrentInputInfo.inputIndex == inputInfo.inputIndex) {
+                mCurrentInputInfo = null;
+            }
         }
     }
 
     @Override
     public FrameInfo dequeueOutputBuffer() {
-        if (mDecoder == null || mOutputBuffers.isEmpty()) {
+        if (mDecoder == null) {
             return null;
+        }
+        if (mCurrentFrameInfo != null) {
+            ALog.i(TAG, "dequeueOutputBuffer same frame again");
+            return mCurrentFrameInfo;
         }
         mCurrentFrameInfo = mOutputBuffers.pollLast();
         return mCurrentFrameInfo;
@@ -117,6 +124,9 @@ public class VideoDecoder implements IDecoder {
     public void queueOutputBuffer(FrameInfo frameInfo) {
         if (mDecoder != null && frameInfo != null) {
             mDecoder.releaseOutputBuffer(frameInfo.outputIndex, false);
+            if (mCurrentFrameInfo != null && mCurrentFrameInfo.outputIndex == frameInfo.outputIndex) {
+                mCurrentFrameInfo = null;
+            }
         }
     }
 

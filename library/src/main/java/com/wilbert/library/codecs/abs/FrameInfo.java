@@ -12,6 +12,9 @@ import java.nio.ByteBuffer;
  */
 public class FrameInfo {
 
+    public int frameWidth;
+    public int frameHeight;
+    public int rotation = 0;
     public int outputIndex;
     public ByteBuffer outputBuffer;
     public MediaCodec.BufferInfo bufferInfo;

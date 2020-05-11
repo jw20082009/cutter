@@ -19,6 +19,8 @@ public interface IExtractor {
 
     FrameInfo getNextFrameBuffer();
 
+    void releaseFrameBuffer(FrameInfo frameInfo);
+
     void seekTo(long timeUs);
 
     MediaFormat getMediaFormat();

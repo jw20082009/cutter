@@ -9,6 +9,7 @@ import com.wilbert.library.codecs.abs.FrameInfo;
  * desc   :
  */
 public interface IVideoClip {
+
     int getWidth();
 
     int getHeight();
@@ -21,5 +22,11 @@ public interface IVideoClip {
 
     int getBitrate();
 
-    FrameInfo getNextFrame();
+    void prepare(String filepath);
+
+    void seekTo(long timeUs);
+
+    void speedUp(float speed);
+
+    void release();
 }

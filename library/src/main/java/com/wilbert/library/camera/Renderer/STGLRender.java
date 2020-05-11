@@ -32,10 +32,7 @@ public class STGLRender {
             + "varying vec2 textureCoordinate;                           \n"
             + "uniform sampler2D y_texture;                       \n"
             + "uniform sampler2D uv_texture;                      \n"
-            + "uniform vec4 showRect;  \n"
             + "void main (void){                                  \n"
-            + "if(textureCoordinate.y < showRect.x || textureCoordinate.y > showRect.z || textureCoordinate.x < showRect.y || textureCoordinate.x > showRect.w){\n"
-            + "    gl_FragColor = vec4(0.0,0.0,0.0,1.0);\n" + " }else{\n"
             + "   float y = texture2D(y_texture, textureCoordinate).r;        \n"
 
             // We had put the Y values of each pixel to the R,G,B components by
@@ -49,7 +46,6 @@ public class STGLRender {
             + "   float b = y + 1.732446 * uv.y;\n      " +
             // We finally set the RGB color of our pixel
             "   gl_FragColor = vec4(r, g, b, 1.0);              \n"
-            + "  }                                                  \n"
             + "}";
 
     private static final String CAMERA_INPUT_FRAGMENT_SHADER_OES = ""

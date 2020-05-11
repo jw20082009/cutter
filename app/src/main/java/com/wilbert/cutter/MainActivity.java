@@ -15,6 +15,7 @@ import android.widget.Button;
 import android.widget.Toast;
 
 import com.wilbert.cutter.bgm.BgmActivity;
+import com.wilbert.cutter.camera.CameraActivity;
 import com.wilbert.cutter.cut.VideoEditActivity;
 import com.wilbert.cutter.edit.EditActivity;
 import com.wilbert.cutter.merge.MergeActivity;
@@ -30,7 +31,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public static final int PERMISSION_REQUEST_VIDEO_CROP = 1;
     public static final int PERMISSION_REQUEST_VIDEO_COMPRESS = 2;
 
-    Button btnCompress, btnCut, btnMusic, btnMerge;
+    Button btnCompress, btnCut, btnMusic, btnMerge, btnCamera;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,10 +41,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         btnCut = findViewById(R.id.btn_cut);
         btnMusic = findViewById(R.id.btn_music);
         btnMerge = findViewById(R.id.btn_merge);
+        btnCamera = findViewById(R.id.btn_camera);
         btnCompress.setOnClickListener(this);
         btnCut.setOnClickListener(this);
         btnMusic.setOnClickListener(this);
         btnMerge.setOnClickListener(this);
+        btnCamera.setOnClickListener(this);
     }
 
     @Override
@@ -61,7 +64,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.btn_merge:
                 startMerge();
                 break;
+            case R.id.btn_camera:
+                startCamera();
+                break;
         }
+    }
+
+    public void startCamera() {
+        startActivity(new Intent(this, CameraActivity.class));
     }
 
     public void startMerge() {

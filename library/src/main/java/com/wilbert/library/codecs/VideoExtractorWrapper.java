@@ -72,7 +72,7 @@ public class VideoExtractorWrapper implements IExtractor {
                 return null;
             FrameInfo frameInfo = mDecoder.dequeueOutputBuffer();
             if (frameInfo != null) {
-                frameInfo.frameWidth = 864;
+                frameInfo.frameWidth = mWidth;
                 frameInfo.frameHeight = mHeight;
                 frameInfo.rotation = mRotation;
             }

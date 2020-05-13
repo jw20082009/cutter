@@ -58,20 +58,16 @@ public class NV21Renderer {
     private int[] mFrameBuffers;
     private int[] mFrameBufferTextures;
     private int mCoordsPerVertex = TextureRotationUtils.CoordsPerVertex;
-    private int mSurfaceWidth, mSurfaceHeight;
-    //    private FloatBuffer mVertexBuffer;
     private FloatBuffer mTextureBuffer;
     private final FloatBuffer mGLCubeBuffer;
     private boolean mTextureInit = false;
-    private final int TEXTURE_TYPE =
-//            GLES11Ext.GL_TEXTURE_EXTERNAL_OES;
-            GLES20.GL_TEXTURE_2D;
+    private boolean mIsInitialized = false;
+    private final int TEXTURE_TYPE = GLES20.GL_TEXTURE_2D;
 
     public NV21Renderer() {
         mGLCubeBuffer = ByteBuffer.allocateDirect(TextureRotationUtil.CUBE.length * 4)
                 .order(ByteOrder.nativeOrder()).asFloatBuffer();
         mGLCubeBuffer.put(TextureRotationUtil.CUBE).position(0);
-//        mVertexBuffer = OpenGLUtils.createFloatBuffer(TextureRotationUtils.CubeVertices);
         mTextureBuffer = ByteBuffer.allocateDirect(TextureRotationUtil.TEXTURE_NO_ROTATION.length * 4)
                 .order(ByteOrder.nativeOrder()).asFloatBuffer();
         mTextureBuffer.put(TextureRotationUtil.TEXTURE_NO_ROTATION).position(0);
@@ -97,18 +93,16 @@ public class NV21Renderer {
         mTextureBuffer.put(textureCords).position(0);
     }
 
-    public void initFrameBuffers(int width, int height) {
-        mSurfaceWidth = width;
-        mSurfaceHeight = height;
+    private void initFrameBuffers(int width, int height) {
         if (mFrameBuffers == null) {
-            mFrameBuffers = new int[2];
-            mFrameBufferTextures = new int[2];
-            GLES20.glGenFramebuffers(2, mFrameBuffers, 0);
-            GLES20.glGenTextures(2, mFrameBufferTextures, 0);
+            mFrameBuffers = new int[1];
+            mFrameBufferTextures = new int[1];
+            GLES20.glGenFramebuffers(1, mFrameBuffers, 0);
+            GLES20.glGenTextures(1, mFrameBufferTextures, 0);
             bindFrameBuffer(mFrameBufferTextures[0], mFrameBuffers[0], width, height);
-            bindFrameBuffer(mFrameBufferTextures[1], mFrameBuffers[1], width, height);
         }
         setUpTexture();
+        mIsInitialized = true;
     }
 
     private void bindFrameBuffer(int textureId, int frameBuffer, int width, int height) {
@@ -160,7 +154,6 @@ public class NV21Renderer {
     }
 
     private void updateNV21YUVTexture(FrameInfo frameInfo) {
-        Log.i("PreviewTracer", "updateNV21YUVTexture: " + mTextureY[0] + ";" + mTextureUV[0]);
         if (frameInfo == null) {
             return;
         }
@@ -168,75 +161,60 @@ public class NV21Renderer {
         if (!mTextureInit) {
             frameRenderBuffer.position(0);
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureY[0]);
-            checkGlError("updateNV21YUVTexture00");
             GLES20.glTexImage2D(TEXTURE_TYPE, 0, GLES20.GL_LUMINANCE, frameInfo.frameWidth,
                     frameInfo.frameHeight, 0, GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE,
                     frameRenderBuffer);
-            checkGlError("updateNV21YUVTexture01");
             frameRenderBuffer.position(frameInfo.frameHeight * frameInfo.frameWidth);
-            checkGlError("updateNV21YUVTexture02");
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[0]);
-            checkGlError("updateNV21YUVTexture03");
             GLES20.glTexImage2D(TEXTURE_TYPE, 0, GLES20.GL_LUMINANCE_ALPHA,
                     frameInfo.frameWidth / 2, frameInfo.frameHeight / 2, 0, GLES20.GL_LUMINANCE_ALPHA,
                     GLES20.GL_UNSIGNED_BYTE, frameRenderBuffer);
-            checkGlError("updateNV21YUVTexture04");
             mTextureInit = true;
         } else {
             frameRenderBuffer.position(0);
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-            checkGlError("updateNV21YUVTexture10");
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureY[0]);
-            checkGlError("updateNV21YUVTexture12");
             GLES20.glTexSubImage2D(TEXTURE_TYPE, 0, 0, 0, frameInfo.frameWidth, frameInfo.frameHeight,
                     GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, frameRenderBuffer);
-            checkGlError("updateNV21YUVTexture13");
             frameRenderBuffer.position(frameInfo.frameWidth * frameInfo.frameHeight);
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[0]);
-            checkGlError("updateNV21YUVTexture14");
             GLES20.glTexSubImage2D(TEXTURE_TYPE, 0, 0, 0, frameInfo.frameWidth / 2, frameInfo.frameHeight / 2,
                     GLES20.GL_LUMINANCE_ALPHA, GLES20.GL_UNSIGNED_BYTE, frameRenderBuffer);
-            checkGlError("updateNV21YUVTexture15");
         }
     }
 
     public int yuv2Rgb(FrameInfo frameInfo) {
-        if (mFrameBuffers == null)
-            return -2;
         if (frameInfo == null)
             return -1;
+        if (mFrameBuffers == null) {
+            initFrameBuffers(frameInfo.frameWidth, frameInfo.frameHeight);
+        }
+        if (!mIsInitialized) {
+            return -1;
+        }
         updateNV21YUVTexture(frameInfo);
-        checkGlError("onDrawFrame-1");
 
         GLES20.glUseProgram(mProgramIn);
         mGLCubeBuffer.position(0);
         GLES20.glVertexAttribPointer(yuvPositionLoc, mCoordsPerVertex, GLES20.GL_FLOAT, false, 0, mGLCubeBuffer);
         GLES20.glEnableVertexAttribArray(yuvPositionLoc);
-        checkGlError("onDrawFrame0");
 
         mTextureBuffer.position(0);
         GLES20.glVertexAttribPointer(yuvTextureLoc, mCoordsPerVertex, GLES20.GL_FLOAT, false, 0, mTextureBuffer);
         GLES20.glEnableVertexAttribArray(yuvTextureLoc);
-        GLES20.glViewport(0, 0, mSurfaceWidth, mSurfaceHeight);
 
         if (mTextureY[0] != -1) {
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-            checkGlError("onDrawFrame10");
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureY[0]);
-            checkGlError("onDrawFrame11:" + mTextureY[0]);
             GLES20.glUniform1i(yTextureLoc, 0);
-//            int error = GLES20.glGetError();
-            checkGlError("onDrawFrame12:" + yTextureLoc);
         }
-        checkGlError("onDrawFrame1");
         if (mTextureUV[0] != -1) {
             GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[0]);
             GLES20.glUniform1i(uvTextureLoc, 1);
         }
-        checkGlError("onDrawFrame2");
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFrameBuffers[0]);
-        GLES20.glViewport(0, 0, 720, 1280);
+        GLES20.glViewport(0, 0, frameInfo.frameWidth, frameInfo.frameHeight);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 
         GLES20.glDisableVertexAttribArray(yuvPositionLoc);
@@ -248,5 +226,23 @@ public class NV21Renderer {
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glUseProgram(0);
         return mFrameBufferTextures[0];
+    }
+
+    public void destroyFrameBuffers() {
+        if (mFrameBufferTextures != null) {
+            GLES20.glDeleteTextures(1, mFrameBufferTextures, 0);
+            mFrameBufferTextures = null;
+        }
+
+        if (mFrameBuffers != null) {
+            GLES20.glDeleteFramebuffers(1, mFrameBuffers, 0);
+            mFrameBuffers = null;
+        }
+    }
+
+    public void release() {
+        mTextureInit = false;
+        destroyFrameBuffers();
+        GLES20.glDeleteProgram(mProgramIn);
     }
 }

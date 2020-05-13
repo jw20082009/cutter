@@ -1,7 +1,5 @@
 package com.wilbert.library.codecs.abs;
 
-import android.media.MediaCodec;
-
 import java.nio.ByteBuffer;
 
 /**
@@ -16,13 +14,18 @@ public class FrameInfo {
     public int frameHeight;
     public int rotation = 0;
     public int outputIndex;
+    public int size;
+    public long presentationTimeUs;
     public ByteBuffer outputBuffer;
-    public MediaCodec.BufferInfo bufferInfo;
 
-    public FrameInfo(int outIndex, ByteBuffer buffer, MediaCodec.BufferInfo info) {
+    public FrameInfo(int outIndex, ByteBuffer buffer, int size, long presentationTimeUs, int frameWidth, int frameHeight, int rotation) {
         this.outputIndex = outIndex;
         this.outputBuffer = buffer;
-        this.bufferInfo = info;
+        this.size = size;
+        this.presentationTimeUs = presentationTimeUs;
+        this.frameWidth = frameWidth;
+        this.frameHeight = frameHeight;
+        this.rotation = rotation;
     }
 
     public FrameInfo(ByteBuffer buffer, int frameWidth, int frameHeight, int rotation) {

@@ -50,7 +50,7 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
     private int[] mTextureUV;
     private int mSurfaceWidth, mSurfaceHeight;
     private SurfaceTexture mSurfaceTexture;
-    private boolean useSTGL = false;
+    private boolean useSTGL = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -189,11 +189,7 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-//        if (mTextureId == -1) {
-//            mTextureId = OpenGLUtils.createTexture(GLES20.GL_TEXTURE_2D);
-//        }
         if (useSTGL) {
-            mGLRender.onSurfaceCreated();/**/
         } else {
             mYuvRender.onSurfaceCreated();
         }
@@ -206,7 +202,7 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
         mSurfaceHeight = height;
         GLES20.glViewport(0, 0, mSurfaceWidth, mSurfaceHeight);
         if (useSTGL) {
-//            mGLRender.calculateVertexBuffer(mSurfaceWidth, mSurfaceHeight, mPictureSize.y, mPictureSize.x);
+            mGLRender.calculateVertexBuffer(mSurfaceWidth, mSurfaceHeight, mPictureSize.y, mPictureSize.x);
             if (mPictureSize != null) {
                 mGLRender.init(mPictureSize.x, mPictureSize.y);
             }
@@ -214,7 +210,6 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
         } else {
             if (mPictureSize != null) {
                 mGLRender.init(mPictureSize.x, mPictureSize.y);
-                mYuvRender.initFrameBuffers(mPictureSize.x, mPictureSize.y);
             }
         }
     }

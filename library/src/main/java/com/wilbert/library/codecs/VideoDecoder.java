@@ -147,10 +147,8 @@ public class VideoDecoder implements IDecoder {
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
             if (index >= 0 && mOutputFormat != null) {
-                FrameInfo frameInfo = new FrameInfo(index, codec.getOutputBuffer(index), info);
-                frameInfo.frameWidth = mDecodeWidth;
-                frameInfo.frameHeight = mDecodeHeight;
-                frameInfo.rotation = mDecodeRotation;
+                FrameInfo frameInfo = new FrameInfo(index, codec.getOutputBuffer(index), info.size,
+                        info.presentationTimeUs, mDecodeWidth, mDecodeHeight, mDecodeRotation);
                 mOutputBuffers.offerFirst(frameInfo);
             } else {
                 ALog.i(TAG, "onOutputBufferAvailable:" + index);

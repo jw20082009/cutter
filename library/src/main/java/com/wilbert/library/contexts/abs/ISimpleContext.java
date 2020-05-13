@@ -1,6 +1,7 @@
-package com.wilbert.library.contexts;
+package com.wilbert.library.contexts.abs;
 
-import java.io.Closeable;
+import com.wilbert.library.contexts.abs.IOpenable;
+
 import java.nio.ByteBuffer;
 
 /**

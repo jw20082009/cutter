@@ -1,4 +1,6 @@
-package com.wilbert.library.contexts;
+package com.wilbert.library.contexts.abs;
+
+import com.wilbert.library.contexts.abs.IOpenable;
 
 /**
  * author : Administrator

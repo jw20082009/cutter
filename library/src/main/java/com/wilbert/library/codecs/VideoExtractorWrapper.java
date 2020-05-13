@@ -7,11 +7,11 @@ import android.os.Looper;
 import android.os.Message;
 import android.text.TextUtils;
 
+import com.wilbert.library.codecs.abs.FrameInfo;
 import com.wilbert.library.codecs.abs.IDecoder;
 import com.wilbert.library.codecs.abs.IExtractor;
 import com.wilbert.library.codecs.abs.IExtractorListener;
 import com.wilbert.library.codecs.abs.InputInfo;
-import com.wilbert.library.codecs.abs.FrameInfo;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -33,9 +33,6 @@ public class VideoExtractorWrapper implements IExtractor {
     private boolean mPrepared = false;
     private boolean mReleasing = false;
     private IDecoder mDecoder;
-    private int mWidth = 0;
-    private int mHeight = 0;
-    private int mRotation = 0;
     private Object mLock = new Object();
 
     public VideoExtractorWrapper() {
@@ -71,11 +68,6 @@ public class VideoExtractorWrapper implements IExtractor {
             if (!mPrepared)
                 return null;
             FrameInfo frameInfo = mDecoder.dequeueOutputBuffer();
-            if (frameInfo != null) {
-                frameInfo.frameWidth = mWidth;
-                frameInfo.frameHeight = mHeight;
-                frameInfo.rotation = mRotation;
-            }
             if (!mHandler.hasMessages(MSG_FEED_BUFFER)) {
                 mHandler.sendEmptyMessage(MSG_FEED_BUFFER);
             }
@@ -180,9 +172,6 @@ public class VideoExtractorWrapper implements IExtractor {
                         }
                         try {
                             mFormat = mExtractor.getMediaFormat();
-                            mWidth = mFormat.getInteger(MediaFormat.KEY_WIDTH);
-                            mHeight = mFormat.getInteger(MediaFormat.KEY_HEIGHT);
-                            mRotation = mFormat.getInteger(MediaFormat.KEY_ROTATION);
                             mDecoder.prepare(mFormat);
                         } catch (Exception e) {
                             e.printStackTrace();

@@ -5,9 +5,9 @@ import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.support.annotation.NonNull;
 
+import com.wilbert.library.codecs.abs.FrameInfo;
 import com.wilbert.library.codecs.abs.IDecoder;
 import com.wilbert.library.codecs.abs.InputInfo;
-import com.wilbert.library.codecs.abs.FrameInfo;
 import com.wilbert.library.log.ALog;
 
 import java.io.IOException;
@@ -26,10 +26,14 @@ public class VideoDecoder implements IDecoder {
     private MediaCodec mDecoder;
     private boolean mPrepared = false;
     private MediaFormat mInputFormat;
+    private MediaFormat mOutputFormat;
     private InputInfo mCurrentInputInfo = null;
     private FrameInfo mCurrentFrameInfo = null;
     private LinkedBlockingDeque<InputInfo> mInputBuffers = new LinkedBlockingDeque<>(6);
     private LinkedBlockingDeque<FrameInfo> mOutputBuffers = new LinkedBlockingDeque<>(4);
+    private int mDecodeWidth = 0;
+    private int mDecodeHeight = 0;
+    private int mDecodeRotation = 0;
 
     /**
      * care must be taken if the codec is flushed immediately or shortly
@@ -142,10 +146,15 @@ public class VideoDecoder implements IDecoder {
 
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
-            if (index >= 0)
-                mOutputBuffers.offerFirst(new FrameInfo(index, codec.getOutputBuffer(index), info));
-            else
+            if (index >= 0 && mOutputFormat != null) {
+                FrameInfo frameInfo = new FrameInfo(index, codec.getOutputBuffer(index), info);
+                frameInfo.frameWidth = mDecodeWidth;
+                frameInfo.frameHeight = mDecodeHeight;
+                frameInfo.rotation = mDecodeRotation;
+                mOutputBuffers.offerFirst(frameInfo);
+            } else {
                 ALog.i(TAG, "onOutputBufferAvailable:" + index);
+            }
         }
 
         @Override
@@ -158,6 +167,15 @@ public class VideoDecoder implements IDecoder {
 
         @Override
         public void onOutputFormatChanged(@NonNull MediaCodec codec, @NonNull MediaFormat format) {
+            mOutputFormat = format;
+            if (mOutputFormat != null) {
+                if (mOutputFormat.containsKey(MediaFormat.KEY_WIDTH))
+                    mDecodeWidth = mOutputFormat.getInteger(MediaFormat.KEY_WIDTH);
+                if (mOutputFormat.containsKey(MediaFormat.KEY_HEIGHT))
+                    mDecodeHeight = mOutputFormat.getInteger(MediaFormat.KEY_HEIGHT);
+                if (mOutputFormat.containsKey(MediaFormat.KEY_ROTATION))
+                    mDecodeRotation = mOutputFormat.getInteger(MediaFormat.KEY_ROTATION);
+            }
             mFlushEnable = true;
         }
     };

@@ -24,4 +24,11 @@ public class FrameInfo {
         this.outputBuffer = buffer;
         this.bufferInfo = info;
     }
+
+    public FrameInfo(ByteBuffer buffer, int frameWidth, int frameHeight, int rotation) {
+        this.outputBuffer = buffer;
+        this.frameWidth = frameWidth;
+        this.frameHeight = frameHeight;
+        this.rotation = rotation;
+    }
 }

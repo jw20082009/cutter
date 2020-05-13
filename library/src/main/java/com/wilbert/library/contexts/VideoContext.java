@@ -3,15 +3,11 @@ package com.wilbert.library.contexts;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.PixelFormat;
-import android.graphics.SurfaceTexture;
 import android.graphics.drawable.Drawable;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
-import android.util.Log;
 import android.view.Surface;
 
-import com.wilbert.library.R;
-import com.wilbert.library.basic.renderer.OesRenderer;
 import com.wilbert.library.clips.abs.IFrameWorker;
 import com.wilbert.library.codecs.ISurfaceObtainer;
 import com.wilbert.library.codecs.abs.FrameInfo;
@@ -19,16 +15,7 @@ import com.wilbert.library.frameprocessor.gles.OpenGLUtils;
 import com.wilbert.library.frameprocessor.gles.TextureRotationUtils;
 import com.wilbert.library.log.ALog;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
-import java.nio.channels.FileChannel;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.TimeUnit;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -62,8 +49,6 @@ public class VideoContext implements ISurfaceObtainer, Runnable, GLSurfaceView.R
     private int mTextureId = -1;
     private Object mLock = new Object();
 
-    private BufferedOutputStream mOutStream;
-
 
     public VideoContext(GLSurfaceView surfaceView, IFrameWorker worker) {
         mSurfaceView = surfaceView;
@@ -71,11 +56,6 @@ public class VideoContext implements ISurfaceObtainer, Runnable, GLSurfaceView.R
         mSurfaceView.setRenderer(this);
         mSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         mWorker = worker;
-        try {
-            mOutStream = new BufferedOutputStream(new FileOutputStream(new File("/sdcard/DCIM/test.data")));
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }
         mYuvRender = new NV21Renderer();
         new Thread(this).start();
     }
@@ -123,10 +103,8 @@ public class VideoContext implements ISurfaceObtainer, Runnable, GLSurfaceView.R
         mPositionHandle = GLES20.glGetAttribLocation(mProgramOut, "aPosition");
         mTextureCoordinateHandle = GLES20.glGetAttribLocation(mProgramOut, "aTextureCoord");
         mInputTextureHandle = GLES20.glGetUniformLocation(mProgramOut, "inputTexture");
-
         mVertexBuffer = OpenGLUtils.createFloatBuffer(TextureRotationUtils.CubeVertices);
         mTextureBuffer = OpenGLUtils.createFloatBuffer(TextureRotationUtils.TextureVertices);
-//        mTextureId = OpenGLUtils.createTexture(GLES20.GL_TEXTURE_2D);
         mYuvRender.onSurfaceCreated();
     }
 
@@ -134,7 +112,7 @@ public class VideoContext implements ISurfaceObtainer, Runnable, GLSurfaceView.R
     public void onSurfaceChanged(GL10 gl, int width, int height) {
         mSurfaceWidth = width;
         mSurfaceHeight = height;
-        mYuvRender.onSurfaceChanged(width, height);
+        mYuvRender.initFrameBuffers(width, height);
     }
 
     @Override
@@ -165,12 +143,7 @@ public class VideoContext implements ISurfaceObtainer, Runnable, GLSurfaceView.R
         GLES20.glEnableVertexAttribArray(mTextureCoordinateHandle);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         checkGlError("onDrawFrame2");
-        if (mTextureId == -1) {
-//            Bitmap bitmap = drawableToBitmap(mSurfaceView.getResources().getDrawable(R.drawable.sample_action_circle, mSurfaceView.getContext().getTheme()));
-//            mTextureId = OpenGLUtils.createTexture(bitmap);
-        }
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId);
-        //GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGB, frameInfo.frameWidth, frameInfo.frameHeight, 0, GLES20.GL_RGB, GLES20.GL_UNSIGNED_BYTE, frameInfo.outputBuffer);
         GLES20.glUniform1i(mInputTextureHandle, 0);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, mVertexCount);
         GLES20.glDisableVertexAttribArray(mPositionHandle);
@@ -191,13 +164,5 @@ public class VideoContext implements ISurfaceObtainer, Runnable, GLSurfaceView.R
     }
 
     public void release() {
-        if (mOutStream != null) {
-            try {
-                mOutStream.close();
-                mOutStream = null;
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
     }
 }

@@ -8,21 +8,22 @@ import android.hardware.Camera;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.os.Build;
+import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
 
 import com.wilbert.cutter.R;
 import com.wilbert.library.camera.Renderer.STGLRender;
+import com.wilbert.library.codecs.abs.FrameInfo;
+import com.wilbert.library.contexts.NV21Renderer;
 import com.wilbert.library.frameprocessor.gles.OpenGLUtils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -35,9 +36,11 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
     private Camera.CameraInfo mCameraInfo = new Camera.CameraInfo();
     private Point mPictureSize;
     private byte[] mFrameData;
+    private FrameInfo mCurrentFrame;
     private int mTextureId = -1;
 
     private STGLRender mGLRender;
+    private NV21Renderer mYuvRender;
     private boolean frameBufferReady = false;
     private boolean nv21YUVDataDirty = true;
     private boolean renderFlag = false;
@@ -47,6 +50,7 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
     private int[] mTextureUV;
     private int mSurfaceWidth, mSurfaceHeight;
     private SurfaceTexture mSurfaceTexture;
+    private boolean useSTGL = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,6 +96,7 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
         surfaceView.setRenderer(this);
         surfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         mGLRender = new STGLRender();
+        mYuvRender = new NV21Renderer();
     }
 
     private void initCamera() {
@@ -184,9 +189,15 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-        if (mTextureId == -1) {
-            mTextureId = OpenGLUtils.createTexture(GLES20.GL_TEXTURE_2D);
+//        if (mTextureId == -1) {
+//            mTextureId = OpenGLUtils.createTexture(GLES20.GL_TEXTURE_2D);
+//        }
+        if (useSTGL) {
+            mGLRender.onSurfaceCreated();/**/
+        } else {
+            mYuvRender.onSurfaceCreated();
         }
+
     }
 
     @Override
@@ -194,18 +205,25 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
         mSurfaceWidth = width;
         mSurfaceHeight = height;
         GLES20.glViewport(0, 0, mSurfaceWidth, mSurfaceHeight);
-        mGLRender.calculateVertexBuffer(mSurfaceWidth, mSurfaceHeight, mPictureSize.y, mPictureSize.x);
-        if (mPictureSize != null) {
-            mGLRender.init(mPictureSize.y, mPictureSize.x);
+        if (useSTGL) {
+//            mGLRender.calculateVertexBuffer(mSurfaceWidth, mSurfaceHeight, mPictureSize.y, mPictureSize.x);
+            if (mPictureSize != null) {
+                mGLRender.init(mPictureSize.x, mPictureSize.y);
+            }
+            setUpTexture();
+        } else {
+            if (mPictureSize != null) {
+                mGLRender.init(mPictureSize.x, mPictureSize.y);
+                mYuvRender.initFrameBuffers(mPictureSize.x, mPictureSize.y);
+            }
         }
-        setUpTexture();
     }
 
     @Override
     public void onDrawFrame(GL10 gl) {
         if (mSurfaceTexture == null) {
-            int textureId = OpenGLUtils.createOESTexture();
-            mSurfaceTexture = new SurfaceTexture(textureId);
+            mTextureId = OpenGLUtils.createOESTexture();
+            mSurfaceTexture = new SurfaceTexture(mTextureId);
             try {
                 mCamera.setPreviewTexture(mSurfaceTexture);
             } catch (IOException e) {
@@ -215,18 +233,36 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
             byte[] buffer = new byte[mPictureSize.x * mPictureSize.y * 3 / 2];
             mCamera.addCallbackBuffer(buffer);
             mCamera.startPreview();
-            mGLRender.adjustTextureBuffer(mCameraInfo.orientation, mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT ? true : false,
-                    (mCameraInfo.orientation == 90 || mCameraInfo.orientation == 270) ? true : false);
+            if (useSTGL) {
+                mGLRender.adjustTextureBuffer(mCameraInfo.orientation, mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT ? true : false,
+                        (mCameraInfo.orientation == 90 || mCameraInfo.orientation == 270) ? true : false);
+            } else {
+                mGLRender.adjustTextureBuffer(mCameraInfo.orientation, mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT ? true : false,
+                        (mCameraInfo.orientation == 90 || mCameraInfo.orientation == 270) ? true : false);
+                mYuvRender.adjustTextureBuffer(mCameraInfo.orientation, mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT ? true : false,
+                        (mCameraInfo.orientation == 90 || mCameraInfo.orientation == 270) ? true : false);
+            }
+        }
+        if (mCurrentFrame == null) {
+            return;
         }
         if (!frameBufferReady) {
             return;
         }
+
+
         renderFlag = !renderFlag;
         if (nv21YUVDataDirty) {
             updateFrameWhenDirty(mFrameData);
-            updateNV21YUVTexture();
+            if (useSTGL)
+                updateNV21YUVTexture();
         }
-        int textureId = mGLRender.YUV2RGB(mTextureY[0], mTextureUV[0], renderFlag);
+        int textureId = -1;
+        if (useSTGL) {
+            textureId = mGLRender.YUV2RGB(mTextureY[0], mTextureUV[0], renderFlag);
+        } else {
+            textureId = mYuvRender.yuv2Rgb(mCurrentFrame);
+        }
         GLES20.glViewport(0, 0, mSurfaceWidth, mSurfaceHeight);
         mGLRender.onDrawFrame(textureId);
     }
@@ -289,6 +325,7 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
     private void initFrameRenderBuffer(int size) {
         frameRenderBuffer = ByteBuffer.allocateDirect(size * 6);
         frameRenderBuffer.position(0);
+        mCurrentFrame = new FrameInfo(frameRenderBuffer, mPictureSize.x, mPictureSize.y, -90);
         frameBufferReady = true;
     }
 
@@ -297,6 +334,7 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
         frameRenderBuffer.position(0);
         frameRenderBuffer.put(data);
         frameRenderBuffer.position(0);
+        mCurrentFrame.outputBuffer = frameRenderBuffer;
         nv21YUVDataDirty = false;
     }
 }

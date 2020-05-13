@@ -7,6 +7,7 @@ import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
 import android.util.Log;
+
 import com.wilbert.library.basic.entity.BaseEffectEntity;
 import com.wilbert.library.frameprocessor.gles.GLImageFilter;
 import com.wilbert.library.frameprocessor.gles.GLImageInputFilter;

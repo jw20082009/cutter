@@ -1,17 +1,16 @@
 package com.wilbert.library.contexts;
 
-import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.util.Log;
 
 import com.wilbert.library.codecs.abs.FrameInfo;
 import com.wilbert.library.frameprocessor.gles.OpenGLUtils;
 import com.wilbert.library.frameprocessor.gles.TextureRotationUtils;
+import com.wilbert.library.frameprocessor.glutils.TextureRotationUtil;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-
-import javax.microedition.khronos.opengles.GL;
 
 import static com.wilbert.library.frameprocessor.gles.OpenGLUtils.checkGlError;
 
@@ -29,28 +28,25 @@ public class NV21Renderer {
             + "	textureCoordinate = inputTextureCoordinate.xy;\n" + "	gl_Position = position;\n"
             + "}";
 
-    private static final String YUV_TEXTURE =
-//            "#extension GL_OES_EGL_image_external : require"
-//            +
-            "precision mediump float;                           \n"
-                    + "varying vec2 textureCoordinate;                           \n"
-                    + "uniform sampler2D y_texture;                       \n"
-                    + "uniform sampler2D uv_texture;                      \n"
-                    + "void main (void){                                  \n"
-                    + "   float y = texture2D(y_texture, textureCoordinate).r;        \n"
+    private static final String YUV_TEXTURE = "precision mediump float;                           \n"
+            + "varying vec2 textureCoordinate;                           \n"
+            + "uniform sampler2D y_texture;                       \n"
+            + "uniform sampler2D uv_texture;                      \n"
+            + "void main (void){                                  \n"
+            + "   float y = texture2D(y_texture, textureCoordinate).r;        \n"
 
-                    // We had put the Y values of each pixel to the R,G,B components by
-                    // GL_LUMINANCE,
-                    // that's why we're pulling it from the R component, we could also use G or B
-                    + "   vec2 uv = texture2D(uv_texture, textureCoordinate).xw - 0.5;       \n"
+            // We had put the Y values of each pixel to the R,G,B components by
+            // GL_LUMINANCE,
+            // that's why we're pulling it from the R component, we could also use G or B
+            + "   vec2 uv = texture2D(uv_texture, textureCoordinate).xw - 0.5;       \n"
 
-                    // The numbers are just YUV to RGB conversion constants
-                    + "   float r = y + 1.370705 * uv.x;\n"
-                    + "   float g = y - 0.698001 * uv.x - 0.337633 * uv.y;\n"
-                    + "   float b = y + 1.732446 * uv.y;\n      " +
-                    // We finally set the RGB color of our pixel
-                    "   gl_FragColor = vec4(r, g, b, 1.0);              \n"
-                    + "}";
+            // The numbers are just YUV to RGB conversion constants
+            + "   float r = y + 1.370705 * uv.x;\n"
+            + "   float g = y - 0.698001 * uv.x - 0.337633 * uv.y;\n"
+            + "   float b = y + 1.732446 * uv.y;\n      " +
+            // We finally set the RGB color of our pixel
+            "   gl_FragColor = vec4(r, g, b, 1.0);              \n"
+            + "}";
 
     private int mProgramIn;
     private int yuvPositionLoc = -1;
@@ -63,15 +59,22 @@ public class NV21Renderer {
     private int[] mFrameBufferTextures;
     private int mCoordsPerVertex = TextureRotationUtils.CoordsPerVertex;
     private int mSurfaceWidth, mSurfaceHeight;
-    private FloatBuffer mVertexBuffer;
+    //    private FloatBuffer mVertexBuffer;
     private FloatBuffer mTextureBuffer;
+    private final FloatBuffer mGLCubeBuffer;
     private boolean mTextureInit = false;
     private final int TEXTURE_TYPE =
 //            GLES11Ext.GL_TEXTURE_EXTERNAL_OES;
             GLES20.GL_TEXTURE_2D;
 
     public NV21Renderer() {
-
+        mGLCubeBuffer = ByteBuffer.allocateDirect(TextureRotationUtil.CUBE.length * 4)
+                .order(ByteOrder.nativeOrder()).asFloatBuffer();
+        mGLCubeBuffer.put(TextureRotationUtil.CUBE).position(0);
+//        mVertexBuffer = OpenGLUtils.createFloatBuffer(TextureRotationUtils.CubeVertices);
+        mTextureBuffer = ByteBuffer.allocateDirect(TextureRotationUtil.TEXTURE_NO_ROTATION.length * 4)
+                .order(ByteOrder.nativeOrder()).asFloatBuffer();
+        mTextureBuffer.put(TextureRotationUtil.TEXTURE_NO_ROTATION).position(0);
     }
 
     public void onSurfaceCreated() {
@@ -80,11 +83,21 @@ public class NV21Renderer {
         yuvTextureLoc = GLES20.glGetAttribLocation(mProgramIn, "inputTextureCoordinate");
         yTextureLoc = GLES20.glGetUniformLocation(mProgramIn, "y_texture");
         uvTextureLoc = GLES20.glGetUniformLocation(mProgramIn, "uv_texture");
-        mVertexBuffer = OpenGLUtils.createFloatBuffer(TextureRotationUtils.CubeVertices);
-        mTextureBuffer = OpenGLUtils.createFloatBuffer(TextureRotationUtils.TextureVertices);
+
     }
 
-    public void onSurfaceChanged(int width, int height) {
+    public void adjustTextureBuffer(int orientation, boolean flipHorizontal, boolean flipVertical) {
+        float[] textureCords = TextureRotationUtil.getRotation(orientation, flipHorizontal,
+                flipVertical);
+        if (mTextureBuffer == null) {
+            mTextureBuffer = ByteBuffer.allocateDirect(textureCords.length * 4)
+                    .order(ByteOrder.nativeOrder()).asFloatBuffer();
+        }
+        mTextureBuffer.clear();
+        mTextureBuffer.put(textureCords).position(0);
+    }
+
+    public void initFrameBuffers(int width, int height) {
         mSurfaceWidth = width;
         mSurfaceHeight = height;
         if (mFrameBuffers == null) {
@@ -188,27 +201,31 @@ public class NV21Renderer {
     }
 
     public int yuv2Rgb(FrameInfo frameInfo) {
-        if (frameInfo == null || frameInfo.bufferInfo == null || frameInfo.bufferInfo.size <= 0)
+        if (mFrameBuffers == null)
+            return -2;
+        if (frameInfo == null)
             return -1;
         updateNV21YUVTexture(frameInfo);
         checkGlError("onDrawFrame-1");
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFrameBuffers[0]);
-        mVertexBuffer.position(0);
-        GLES20.glVertexAttribPointer(yuvPositionLoc, mCoordsPerVertex, GLES20.GL_FLOAT, false, 0, mVertexBuffer);
+
+        GLES20.glUseProgram(mProgramIn);
+        mGLCubeBuffer.position(0);
+        GLES20.glVertexAttribPointer(yuvPositionLoc, mCoordsPerVertex, GLES20.GL_FLOAT, false, 0, mGLCubeBuffer);
         GLES20.glEnableVertexAttribArray(yuvPositionLoc);
         checkGlError("onDrawFrame0");
-        mTextureBuffer.position(0);
 
+        mTextureBuffer.position(0);
         GLES20.glVertexAttribPointer(yuvTextureLoc, mCoordsPerVertex, GLES20.GL_FLOAT, false, 0, mTextureBuffer);
         GLES20.glEnableVertexAttribArray(yuvTextureLoc);
         GLES20.glViewport(0, 0, mSurfaceWidth, mSurfaceHeight);
+
         if (mTextureY[0] != -1) {
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
             checkGlError("onDrawFrame10");
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureY[0]);
             checkGlError("onDrawFrame11:" + mTextureY[0]);
             GLES20.glUniform1i(yTextureLoc, 0);
-            int error = GLES20.glGetError();
+//            int error = GLES20.glGetError();
             checkGlError("onDrawFrame12:" + yTextureLoc);
         }
         checkGlError("onDrawFrame1");
@@ -218,7 +235,8 @@ public class NV21Renderer {
             GLES20.glUniform1i(uvTextureLoc, 1);
         }
         checkGlError("onDrawFrame2");
-        GLES20.glViewport(0, 0, mSurfaceWidth, mSurfaceHeight);
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFrameBuffers[0]);
+        GLES20.glViewport(0, 0, 720, 1280);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 
         GLES20.glDisableVertexAttribArray(yuvPositionLoc);

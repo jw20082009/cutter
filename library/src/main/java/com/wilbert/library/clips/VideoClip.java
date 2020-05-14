@@ -74,6 +74,7 @@ public class VideoClip implements IVideoClip, IFrameWorker {
             mExtractor = new VideoExtractorWrapper();
             mExtractor.setListener(extractorListener);
             mExtractor.prepare(mFilePath, VideoExtractor.Type.VIDEO);
+            mExtractor.start();
             mPermit.release();
         } catch (InterruptedException e) {
             e.printStackTrace();

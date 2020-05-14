@@ -47,7 +47,8 @@ public class NV21Renderer {
             // We finally set the RGB color of our pixel
             "   gl_FragColor = vec4(r, g, b, 1.0);              \n"
             + "}";
-
+    private int mSurfaceWidth = -1;
+    private int mSurfaceHeight = -1;
     private int mProgramIn;
     private int yuvPositionLoc = -1;
     private int yuvTextureLoc = -1;
@@ -59,15 +60,12 @@ public class NV21Renderer {
     private int[] mFrameBufferTextures;
     private int mCoordsPerVertex = TextureRotationUtils.CoordsPerVertex;
     private FloatBuffer mTextureBuffer;
-    private final FloatBuffer mGLCubeBuffer;
+    private FloatBuffer mVertexBuffer;
     private boolean mTextureInit = false;
     private boolean mIsInitialized = false;
     private final int TEXTURE_TYPE = GLES20.GL_TEXTURE_2D;
 
     public NV21Renderer() {
-        mGLCubeBuffer = ByteBuffer.allocateDirect(TextureRotationUtil.CUBE.length * 4)
-                .order(ByteOrder.nativeOrder()).asFloatBuffer();
-        mGLCubeBuffer.put(TextureRotationUtil.CUBE).position(0);
         mTextureBuffer = ByteBuffer.allocateDirect(TextureRotationUtil.TEXTURE_NO_ROTATION.length * 4)
                 .order(ByteOrder.nativeOrder()).asFloatBuffer();
         mTextureBuffer.put(TextureRotationUtil.TEXTURE_NO_ROTATION).position(0);
@@ -79,7 +77,35 @@ public class NV21Renderer {
         yuvTextureLoc = GLES20.glGetAttribLocation(mProgramIn, "inputTextureCoordinate");
         yTextureLoc = GLES20.glGetUniformLocation(mProgramIn, "y_texture");
         uvTextureLoc = GLES20.glGetUniformLocation(mProgramIn, "uv_texture");
+    }
 
+    public void onSurfaceChanged(int width, int height) {
+        this.mSurfaceWidth = width;
+        this.mSurfaceHeight = height;
+    }
+
+    private void calculateVertexBuffer(int displayW, int displayH, int imageW, int imageH) {
+        int outputHeight = displayH;
+        int outputWidth = displayW;
+        float ratio1 = (float) outputWidth / imageW;
+        float ratio2 = (float) outputHeight / imageH;
+        float ratio = Math.max(ratio1, ratio2);//max时为内切，min时为填满并裁剪
+        int imageWidthNew = Math.round(imageW * ratio);
+        int imageHeightNew = Math.round(imageH * ratio);
+        float ratioWidth = imageWidthNew / (float) outputWidth;
+        float ratioHeight = imageHeightNew / (float) outputHeight;
+        float[] cube = new float[]{
+                TextureRotationUtil.CUBE[0] / ratioHeight, TextureRotationUtil.CUBE[1] / ratioWidth,
+                TextureRotationUtil.CUBE[2] / ratioHeight, TextureRotationUtil.CUBE[3] / ratioWidth,
+                TextureRotationUtil.CUBE[4] / ratioHeight, TextureRotationUtil.CUBE[5] / ratioWidth,
+                TextureRotationUtil.CUBE[6] / ratioHeight, TextureRotationUtil.CUBE[7] / ratioWidth,
+        };
+        if (mVertexBuffer == null) {
+            mVertexBuffer = ByteBuffer.allocateDirect(cube.length * 4)
+                    .order(ByteOrder.nativeOrder()).asFloatBuffer();
+        }
+        mVertexBuffer.clear();
+        mVertexBuffer.put(cube).position(0);
     }
 
     public void adjustTextureBuffer(int orientation, boolean flipHorizontal, boolean flipVertical) {
@@ -193,10 +219,12 @@ public class NV21Renderer {
             return -1;
         }
         updateNV21YUVTexture(frameInfo);
-
+        if (mVertexBuffer == null) {
+            calculateVertexBuffer(mSurfaceWidth, mSurfaceHeight, frameInfo.frameWidth, frameInfo.frameHeight);
+        }
         GLES20.glUseProgram(mProgramIn);
-        mGLCubeBuffer.position(0);
-        GLES20.glVertexAttribPointer(yuvPositionLoc, mCoordsPerVertex, GLES20.GL_FLOAT, false, 0, mGLCubeBuffer);
+        mVertexBuffer.position(0);
+        GLES20.glVertexAttribPointer(yuvPositionLoc, mCoordsPerVertex, GLES20.GL_FLOAT, false, 0, mVertexBuffer);
         GLES20.glEnableVertexAttribArray(yuvPositionLoc);
 
         mTextureBuffer.position(0);

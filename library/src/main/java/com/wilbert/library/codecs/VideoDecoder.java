@@ -8,10 +8,13 @@ import android.support.annotation.NonNull;
 import com.wilbert.library.codecs.abs.FrameInfo;
 import com.wilbert.library.codecs.abs.IDecoder;
 import com.wilbert.library.codecs.abs.InputInfo;
+import com.wilbert.library.contexts.Timeline;
+import com.wilbert.library.contexts.VideoContext;
 import com.wilbert.library.log.ALog;
 
 import java.io.IOException;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.TimeUnit;
 
 import static android.media.MediaCodecList.REGULAR_CODECS;
 
@@ -56,9 +59,8 @@ public class VideoDecoder implements IDecoder {
             return false;
         }
         mInputFormat = format;
-        MediaCodecList codecList = new MediaCodecList(REGULAR_CODECS);
-        String codecName = codecList.findDecoderForFormat(mInputFormat);
-        mDecoder = MediaCodec.createByCodecName(codecName);
+        String mime = format.getString(MediaFormat.KEY_MIME);
+        mDecoder = MediaCodec.createDecoderByType(mime);
         mDecoder.setCallback(mCallback);
         mDecoder.configure(mInputFormat, null, null, 0);
         mDecoder.start();
@@ -105,7 +107,11 @@ public class VideoDecoder implements IDecoder {
             ALog.i(TAG, "dequeueInputBuffer same frame again");
             return null;
         }
-        mCurrentInputInfo = mInputBuffers.pollLast();
+        try {
+            mCurrentInputInfo = mInputBuffers.pollLast(100, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         if (mCurrentInputInfo != null) {
             ALog.i(TAG, "dequeueInputBuffer:" + mCurrentInputInfo.time + ";bufferIndex:" + mCurrentInputInfo.inputIndex);
         }
@@ -118,8 +124,8 @@ public class VideoDecoder implements IDecoder {
             if (inputInfo != null) {
                 ALog.i(TAG, "queueInputBuffer,time:" + inputInfo.time + ";size:" + inputInfo.size + ";flag:" + inputInfo.lastFrameFlag + ";index:" + inputInfo.inputIndex);
             }
-            mDecoder.queueInputBuffer(inputInfo.inputIndex, 0, inputInfo.size<=0?0:inputInfo.size,
-                    inputInfo.time<=0?0:inputInfo.time, inputInfo.lastFrameFlag ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
+            mDecoder.queueInputBuffer(inputInfo.inputIndex, 0, inputInfo.size <= 0 ? 0 : inputInfo.size,
+                    inputInfo.time <= 0 ? 0 : inputInfo.time, inputInfo.lastFrameFlag ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
             if (mCurrentInputInfo != null && mCurrentInputInfo.inputIndex == inputInfo.inputIndex) {
                 mCurrentInputInfo = null;
             }
@@ -136,7 +142,11 @@ public class VideoDecoder implements IDecoder {
             ALog.i(TAG, "dequeueOutputBuffer same frame again");
             return null;
         }
-        mCurrentFrameInfo = mOutputBuffers.pollLast();
+        try {
+            mCurrentFrameInfo = mOutputBuffers.pollLast(100, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         if (mCurrentFrameInfo != null) {
             //ALog.i(TAG, "dequeueOutputBuffer:" + mCurrentFrameInfo.presentationTimeUs + ";bufferIndex:" + mCurrentFrameInfo.outputIndex);
         }
@@ -156,10 +166,17 @@ public class VideoDecoder implements IDecoder {
         }
     }
 
+    private boolean firstInputIndex = true;
+    private boolean firstOutputIndex = true;
+
     private MediaCodec.Callback mCallback = new MediaCodec.Callback() {
 
         @Override
         public void onInputBufferAvailable(@NonNull MediaCodec codec, int index) {
+            if (firstInputIndex && index >= 0) {
+                ALog.i(VideoContext.TAG, TAG + ";onInputBufferAvailable:" + index);
+                firstInputIndex = false;
+            }
             if (index >= 0)
                 mInputBuffers.offerFirst(new InputInfo(index, codec.getInputBuffer(index)));
             else
@@ -168,6 +185,10 @@ public class VideoDecoder implements IDecoder {
 
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
+            if (firstOutputIndex && index >= 0) {
+                ALog.i(VideoContext.TAG, TAG + ";onOutputBufferAvailable:" + index);
+                firstOutputIndex = false;
+            }
             if (index >= 0 && mOutputFormat != null) {
                 FrameInfo frameInfo = new FrameInfo(index, codec.getOutputBuffer(index), info.size,
                         info.presentationTimeUs, mDecodeWidth, mDecodeHeight, mDecodeRotation);

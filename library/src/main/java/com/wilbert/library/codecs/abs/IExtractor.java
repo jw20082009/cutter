@@ -15,7 +15,7 @@ import java.io.FileDescriptor;
 public interface IExtractor {
     void prepare(String filePath, VideoExtractor.Type type);
 
-    void prepare(FileDescriptor descriptor, VideoExtractor.Type type);
+    void start();
 
     FrameInfo getNextFrameBuffer();
 

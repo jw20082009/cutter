@@ -10,6 +10,7 @@ import android.widget.TextView;
 import com.wilbert.cutter.R;
 import com.wilbert.library.clips.VideoClip;
 import com.wilbert.library.contexts.VideoContext;
+import com.wilbert.library.log.ALog;
 
 public class EditActivity extends AppCompatActivity {
     final String TAG = "EditActivity";
@@ -42,6 +43,7 @@ public class EditActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         mSurfaceView.onResume();
+        ALog.i(VideoContext.TAG, TAG + " onResume");
     }
 
     @Override

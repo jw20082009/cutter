@@ -23,8 +23,8 @@ import javax.microedition.khronos.opengles.GL10;
  * time   : 2020/04/26
  * desc   :
  */
-public class VideoContext{
-    private final String TAG = "VideoContext";
+public class VideoContext {
+    public static final String TAG = "VideoContext";
     private LinkedBlockingDeque<FrameInfo> mFrameInfos = new LinkedBlockingDeque<>(1);
     private GLSurfaceView mSurfaceView;
     private IFrameWorker mWorker;
@@ -66,21 +66,28 @@ public class VideoContext{
 
         @Override
         public void run() {
+            ALog.i(TAG, "worker started");
             while (mPlaying.get()) {
                 if (mWorker != null) {
                     FrameInfo frameInfo = mWorker.getNextFrame();
+                    if (mFirstFrame) {
+                        ALog.i(TAG, "workeer worked");
+                    }
                     long timeElapse = -1;
                     boolean needRender = false;
                     if (frameInfo != null) {
-                        if (mFirstFrame) {
-                            mTimeline.start();
-                            mFirstFrame = false;
-                        }
                         try {
                             mFrameInfos.offerFirst(frameInfo, 40, TimeUnit.MILLISECONDS);
+                            if (mFirstFrame) {
+                                ALog.i(TAG, "worker offered");
+                            }
                             needRender = true;
                         } catch (InterruptedException e) {
                             e.printStackTrace();
+                        }
+                        if (mFirstFrame) {
+                            mTimeline.start();
+                            mFirstFrame = false;
                         }
                         timeElapse = mTimeline.compareTime(frameInfo.presentationTimeUs);
                     } else {
@@ -107,6 +114,8 @@ public class VideoContext{
             }
         }
     };
+
+    boolean firstDraw = true;
 
     private class VideoRenderer implements GLSurfaceView.Renderer {
 
@@ -136,17 +145,23 @@ public class VideoContext{
             mStatus = STATUS_PREPARED;
             GLES20.glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+            ALog.i(TAG, "onSurfaceCreated");
         }
 
         @Override
         public void onSurfaceChanged(GL10 gl, int width, int height) {
             mSurfaceWidth = width;
             mSurfaceHeight = height;
+            mYuvRender.onSurfaceChanged(width, height);
             mStatus = STATUS_RUNNING;
         }
 
         @Override
         public void onDrawFrame(GL10 gl) {
+            if (firstDraw) {
+                ALog.i(TAG, "onDrawFrame firstFrame");
+                firstDraw = false;
+            }
             if (mStatus == STATUS_RELEASING) {
                 _release();
                 changeStatus(STATUS_IDLE);
@@ -159,7 +174,7 @@ public class VideoContext{
             }
             FrameInfo frameInfo = null;
             try {
-                frameInfo = mFrameInfos.pollLast(40, TimeUnit.MICROSECONDS);
+                frameInfo = mFrameInfos.pollLast(40, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }

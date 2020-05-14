@@ -48,6 +48,7 @@ public class VideoDecoder implements IDecoder {
 
     @Override
     public boolean prepare(MediaFormat format) throws IOException {
+        ALog.i(TAG, "prepare:" + mPrepared);
         if (mPrepared && mDecoder != null) {
             return true;
         }
@@ -67,6 +68,7 @@ public class VideoDecoder implements IDecoder {
 
     @Override
     public boolean flush() {
+        ALog.i(TAG, "flush");
         if (mFlushEnable) {
             mCurrentInputInfo = null;
             mCurrentFrameInfo = null;
@@ -82,6 +84,7 @@ public class VideoDecoder implements IDecoder {
 
     @Override
     public void release() {
+        ALog.i(TAG, "release");
         if (mDecoder != null) {
             mDecoder.stop();
             mDecoder.setCallback(null);
@@ -97,14 +100,26 @@ public class VideoDecoder implements IDecoder {
         if (mDecoder == null) {
             return null;
         }
+        if (mCurrentInputInfo != null) {
+            //保证外部必须先返回上一个buffer,才能取走下一个buffer
+            ALog.i(TAG, "dequeueInputBuffer same frame again");
+            return null;
+        }
         mCurrentInputInfo = mInputBuffers.pollLast();
+        if (mCurrentInputInfo != null) {
+            ALog.i(TAG, "dequeueInputBuffer:" + mCurrentInputInfo.time + ";bufferIndex:" + mCurrentInputInfo.inputIndex);
+        }
         return mCurrentInputInfo;
     }
 
     @Override
     public void queueInputBuffer(InputInfo inputInfo) {
         if (mDecoder != null && inputInfo != null) {
-            mDecoder.queueInputBuffer(inputInfo.inputIndex, 0, inputInfo.size, inputInfo.time, inputInfo.lastFrameFlag ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
+            if (inputInfo != null) {
+                ALog.i(TAG, "queueInputBuffer,time:" + inputInfo.time + ";size:" + inputInfo.size + ";flag:" + inputInfo.lastFrameFlag + ";index:" + inputInfo.inputIndex);
+            }
+            mDecoder.queueInputBuffer(inputInfo.inputIndex, 0, inputInfo.size<=0?0:inputInfo.size,
+                    inputInfo.time<=0?0:inputInfo.time, inputInfo.lastFrameFlag ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
             if (mCurrentInputInfo != null && mCurrentInputInfo.inputIndex == inputInfo.inputIndex) {
                 mCurrentInputInfo = null;
             }
@@ -117,16 +132,23 @@ public class VideoDecoder implements IDecoder {
             return null;
         }
         if (mCurrentFrameInfo != null) {
+            //保证外部必须先返回上一个buffer,才能取走下一个buffer
             ALog.i(TAG, "dequeueOutputBuffer same frame again");
-            return mCurrentFrameInfo;
+            return null;
         }
         mCurrentFrameInfo = mOutputBuffers.pollLast();
+        if (mCurrentFrameInfo != null) {
+            //ALog.i(TAG, "dequeueOutputBuffer:" + mCurrentFrameInfo.presentationTimeUs + ";bufferIndex:" + mCurrentFrameInfo.outputIndex);
+        }
         return mCurrentFrameInfo;
     }
 
     @Override
     public void queueOutputBuffer(FrameInfo frameInfo) {
         if (mDecoder != null && frameInfo != null) {
+            if (frameInfo != null) {
+                //ALog.i(TAG, "releaseOutputBuffer:" + frameInfo.presentationTimeUs + ";bufferIndex:" + mCurrentFrameInfo.outputIndex);
+            }
             mDecoder.releaseOutputBuffer(frameInfo.outputIndex, false);
             if (mCurrentFrameInfo != null && mCurrentFrameInfo.outputIndex == frameInfo.outputIndex) {
                 mCurrentFrameInfo = null;

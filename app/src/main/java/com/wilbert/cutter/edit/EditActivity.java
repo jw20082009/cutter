@@ -47,6 +47,7 @@ public class EditActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        mContext.release();
         mSurfaceView.onPause();
     }
 

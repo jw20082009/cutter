@@ -1,21 +1,18 @@
 package com.wilbert.library.contexts;
 
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.PixelFormat;
-import android.graphics.drawable.Drawable;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
-import android.view.Surface;
 
 import com.wilbert.library.clips.abs.IFrameWorker;
-import com.wilbert.library.codecs.ISurfaceObtainer;
 import com.wilbert.library.codecs.abs.FrameInfo;
 import com.wilbert.library.frameprocessor.gles.OpenGLUtils;
 import com.wilbert.library.frameprocessor.gles.TextureRotationUtils;
 import com.wilbert.library.log.ALog;
 
 import java.nio.FloatBuffer;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -26,13 +23,14 @@ import javax.microedition.khronos.opengles.GL10;
  * time   : 2020/04/26
  * desc   :
  */
-public class VideoContext implements ISurfaceObtainer {
+public class VideoContext{
     private final String TAG = "VideoContext";
-    private FrameInfo mFrameInfo;
+    private LinkedBlockingDeque<FrameInfo> mFrameInfos = new LinkedBlockingDeque<>(1);
     private GLSurfaceView mSurfaceView;
     private IFrameWorker mWorker;
-    private boolean mPlaying = true;
+    private AtomicBoolean mPlaying = new AtomicBoolean(true);
 
+    private final int FRAME_TIME = 33_333;//33ms一帧
     private int mSurfaceWidth, mSurfaceHeight;
     private int mProgramOut;
     private int mPositionHandle;
@@ -43,6 +41,7 @@ public class VideoContext implements ISurfaceObtainer {
     private Timeline mTimeline = new Timeline();
     private FloatBuffer mVertexBuffer;
     private FloatBuffer mTextureBuffer;
+    private VideoRenderer mRender;
     private Object mLock = new Object();
     private Object mSync = new Object();
 
@@ -51,18 +50,15 @@ public class VideoContext implements ISurfaceObtainer {
         mWorker = worker;
         mSurfaceView = surfaceView;
         mSurfaceView.setEGLContextClientVersion(2);
-        mSurfaceView.setRenderer(new VideoRenderer());
+        mRender = new VideoRenderer();
+        mSurfaceView.setRenderer(mRender);
         mSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         new Thread(mFrameWorker).start();
     }
 
     public void release() {
-
-    }
-
-    @Override
-    public Surface getSurface() {
-        return null;
+        mPlaying.set(false);
+        mRender.release();
     }
 
     private Runnable mFrameWorker = new Runnable() {
@@ -70,20 +66,25 @@ public class VideoContext implements ISurfaceObtainer {
 
         @Override
         public void run() {
-            while (mPlaying) {
+            while (mPlaying.get()) {
                 if (mWorker != null) {
+                    FrameInfo frameInfo = mWorker.getNextFrame();
                     long timeElapse = -1;
-                    synchronized (mSync) {
-                        mFrameInfo = mWorker.getNextFrame();
+                    boolean needRender = false;
+                    if (frameInfo != null) {
                         if (mFirstFrame) {
                             mTimeline.start();
                             mFirstFrame = false;
                         }
-                        if (mFrameInfo != null) {
-                            timeElapse = mTimeline.compareTime(mFrameInfo.presentationTimeUs);
-                        } else {
-                            timeElapse = 10_000;
+                        try {
+                            mFrameInfos.offerFirst(frameInfo, 40, TimeUnit.MILLISECONDS);
+                            needRender = true;
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
                         }
+                        timeElapse = mTimeline.compareTime(frameInfo.presentationTimeUs);
+                    } else {
+                        timeElapse = 10_000;
                     }
                     if (timeElapse > 0) {
                         try {
@@ -97,10 +98,11 @@ public class VideoContext implements ISurfaceObtainer {
                             e.printStackTrace();
                         }
                     }
-                    mSurfaceView.requestRender();
+                    if (needRender)
+                        mSurfaceView.requestRender();
                 } else {
                     ALog.i(TAG, "no worker and quit");
-                    mPlaying = false;
+                    mPlaying.set(false);
                 }
             }
         }
@@ -132,6 +134,8 @@ public class VideoContext implements ISurfaceObtainer {
             mTextureBuffer = OpenGLUtils.createFloatBuffer(TextureRotationUtils.TextureVertices);
             mYuvRender.onSurfaceCreated();
             mStatus = STATUS_PREPARED;
+            GLES20.glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
         }
 
         @Override
@@ -146,22 +150,26 @@ public class VideoContext implements ISurfaceObtainer {
             if (mStatus == STATUS_RELEASING) {
                 _release();
                 changeStatus(STATUS_IDLE);
+                ALog.i(TAG, "onDrawFrame when releasing");
                 return;
             }
             if (mWorker == null) {
+                ALog.i(TAG, "onDrawFrame null worker");
                 return;
             }
-            GLES20.glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-            FrameInfo frameInfo = mFrameInfo;
-            synchronized (mSync) {
-                frameInfo = mFrameInfo;
-                if (frameInfo == null)
-                    return;
-                mFrameInfo = null;
+            FrameInfo frameInfo = null;
+            try {
+                frameInfo = mFrameInfos.pollLast(40, TimeUnit.MICROSECONDS);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            if (frameInfo == null) {
+                ALog.i(TAG, "onDrawFrame null frameInfo");
+                return;
             }
             int textureId = mYuvRender.yuv2Rgb(frameInfo);
             if (textureId == -1) {
+                ALog.i(TAG, "onDrawFrame null textureId");
                 return;
             }
             GLES20.glUseProgram(mProgramOut);

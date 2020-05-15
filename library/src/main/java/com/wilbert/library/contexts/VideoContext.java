@@ -5,6 +5,7 @@ import android.opengl.GLSurfaceView;
 
 import com.wilbert.library.clips.abs.IFrameWorker;
 import com.wilbert.library.codecs.abs.FrameInfo;
+import com.wilbert.library.contexts.abs.IYuvRenderer;
 import com.wilbert.library.frameprocessor.gles.OpenGLUtils;
 import com.wilbert.library.frameprocessor.gles.TextureRotationUtils;
 import com.wilbert.library.log.ALog;
@@ -117,10 +118,11 @@ public class VideoContext {
         private final int STATUS_RELEASING = 0x03;
 
         private int mStatus = STATUS_IDLE;
-        private NV21Renderer mYuvRender;
+        private IYuvRenderer mYuvRender;
 
         public VideoRenderer() {
             mYuvRender = new NV21Renderer();
+//            mYuvRender = new YUV420pRenderer();
         }
 
         @Override
@@ -135,7 +137,7 @@ public class VideoContext {
             mTextureBuffer = OpenGLUtils.createFloatBuffer(TextureRotationUtils.TextureVertices);
             mYuvRender.onSurfaceCreated();
             mStatus = STATUS_PREPARED;
-            GLES20.glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+            GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
             ALog.i(TAG, "onSurfaceCreated");
         }

@@ -1,22 +1,17 @@
 package com.wilbert.library.codecs;
 
 import android.media.MediaCodec;
-import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.support.annotation.NonNull;
 
 import com.wilbert.library.codecs.abs.FrameInfo;
 import com.wilbert.library.codecs.abs.IDecoder;
 import com.wilbert.library.codecs.abs.InputInfo;
-import com.wilbert.library.contexts.Timeline;
-import com.wilbert.library.contexts.VideoContext;
 import com.wilbert.library.log.ALog;
 
 import java.io.IOException;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
-
-import static android.media.MediaCodecList.REGULAR_CODECS;
 
 /**
  * author : Administrator

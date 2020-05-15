@@ -2,6 +2,7 @@ package com.wilbert.cutter.camera;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.graphics.ImageFormat;
 import android.graphics.Point;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
@@ -50,7 +51,7 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
     private int[] mTextureUV;
     private int mSurfaceWidth, mSurfaceHeight;
     private SurfaceTexture mSurfaceTexture;
-    private boolean useSTGL = true;
+    private boolean useSTGL = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,7 +97,7 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
         surfaceView.setRenderer(this);
         surfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         mGLRender = new STGLRender();
-        mYuvRender = new NV21Renderer();
+        mYuvRender = new NV21Renderer(NV21Renderer.Type.CAMERA_PREVIEW);
     }
 
     private void initCamera() {
@@ -117,6 +118,7 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
             setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
         }
         mPictureSize = getSuitablePictureSize();
+        parameters.setPreviewFormat(ImageFormat.NV21);
         parameters.setPreviewSize(mPictureSize.x, mPictureSize.y);
         parameters.setPictureSize(mPictureSize.x, mPictureSize.y);
         mCamera.setParameters(parameters);
@@ -193,7 +195,6 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
         } else {
             mYuvRender.onSurfaceCreated();
         }
-
     }
 
     @Override
@@ -201,8 +202,8 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
         mSurfaceWidth = width;
         mSurfaceHeight = height;
         GLES20.glViewport(0, 0, mSurfaceWidth, mSurfaceHeight);
+        mGLRender.calculateVertexBuffer(mSurfaceWidth, mSurfaceHeight, mPictureSize.y, mPictureSize.x);
         if (useSTGL) {
-            mGLRender.calculateVertexBuffer(mSurfaceWidth, mSurfaceHeight, mPictureSize.y, mPictureSize.x);
             if (mPictureSize != null) {
                 mGLRender.init(mPictureSize.x, mPictureSize.y);
             }
@@ -234,8 +235,8 @@ public class CameraActivity extends AppCompatActivity implements GLSurfaceView.R
             } else {
                 mGLRender.adjustTextureBuffer(mCameraInfo.orientation, mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT ? true : false,
                         (mCameraInfo.orientation == 90 || mCameraInfo.orientation == 270) ? true : false);
-                mYuvRender.adjustTextureBuffer(mCameraInfo.orientation, mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT ? true : false,
-                        (mCameraInfo.orientation == 90 || mCameraInfo.orientation == 270) ? true : false);
+//                mYuvRender.adjustTextureBuffer(mCameraInfo.orientation, mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT ? true : false,
+//                        (mCameraInfo.orientation == 90 || mCameraInfo.orientation == 270) ? true : false);
             }
         }
         if (mCurrentFrame == null) {

@@ -3,6 +3,7 @@ package com.wilbert.library.codecs;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.support.annotation.NonNull;
+import android.telephony.SmsMessage;
 
 import com.wilbert.library.codecs.abs.FrameInfo;
 import com.wilbert.library.codecs.abs.IDecoder;
@@ -29,9 +30,12 @@ public class VideoDecoder implements IDecoder {
     private FrameInfo mCurrentFrameInfo = null;
     private LinkedBlockingDeque<InputInfo> mInputBuffers = new LinkedBlockingDeque<>(6);
     private LinkedBlockingDeque<FrameInfo> mOutputBuffers = new LinkedBlockingDeque<>(4);
+    private int mType = 0;//0:video;1:audio;
     private int mDecodeWidth = 0;
     private int mDecodeHeight = 0;
     private int mDecodeRotation = 0;
+    private int mChannelCount = 0;
+    private int mSampleRate = 0;
 
     /**
      * care must be taken if the codec is flushed immediately or shortly
@@ -55,6 +59,13 @@ public class VideoDecoder implements IDecoder {
         }
         mInputFormat = format;
         String mime = format.getString(MediaFormat.KEY_MIME);
+        if (mime.contains("video")) {
+            mType = 0;
+        } else if (mime.contains("audio")) {
+            mType = 1;
+        } else {
+            mType = -1;
+        }
         mDecoder = MediaCodec.createDecoderByType(mime);
         mDecoder.setCallback(mCallback);
         mDecoder.configure(mInputFormat, null, null, 0);
@@ -174,9 +185,17 @@ public class VideoDecoder implements IDecoder {
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
             if (index >= 0 && mOutputFormat != null) {
-                FrameInfo frameInfo = new FrameInfo(index, codec.getOutputBuffer(index), info.size,
-                        info.presentationTimeUs, mDecodeWidth, mDecodeHeight, mDecodeRotation);
-                mOutputBuffers.offerFirst(frameInfo);
+                FrameInfo frameInfo = null;
+                if (mType == 0) {
+                    frameInfo = new FrameInfo(index, codec.getOutputBuffer(index), info.size,
+                            info.presentationTimeUs, mDecodeWidth, mDecodeHeight, mDecodeRotation);
+                } else if (mType == 1) {
+                    frameInfo = new FrameInfo(index, codec.getOutputBuffer(index), info.size,
+                            info.presentationTimeUs, mChannelCount, mSampleRate);
+                }
+                if (frameInfo != null) {
+                    mOutputBuffers.offerFirst(frameInfo);
+                }
             } else {
                 ALog.i(TAG, "onOutputBufferAvailable:" + index);
             }
@@ -200,6 +219,10 @@ public class VideoDecoder implements IDecoder {
                     mDecodeHeight = mOutputFormat.getInteger(MediaFormat.KEY_HEIGHT);
                 if (mOutputFormat.containsKey(MediaFormat.KEY_ROTATION))
                     mDecodeRotation = mOutputFormat.getInteger(MediaFormat.KEY_ROTATION);
+                if (mOutputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT))
+                    mChannelCount = mOutputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
+                if (mOutputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE))
+                    mSampleRate = mOutputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE);
             }
             mFlushEnable = true;
         }

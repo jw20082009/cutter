@@ -15,10 +15,22 @@ public class FrameInfo {
     public int rotation = 0;
     public int outputIndex;
     public int size;
+    public int sampleRate;
+    public int channels;
     public long presentationTimeUs;
     public ByteBuffer outputBuffer;
 
     public FrameInfo(int outIndex, ByteBuffer buffer, int size, long presentationTimeUs, int frameWidth, int frameHeight, int rotation) {
+        this.outputIndex = outIndex;
+        this.outputBuffer = buffer;
+        this.size = size;
+        this.presentationTimeUs = presentationTimeUs;
+        this.frameWidth = frameWidth;
+        this.frameHeight = frameHeight;
+        this.rotation = rotation;
+    }
+
+    public FrameInfo(int outIndex, ByteBuffer buffer, int size, long presentationTimeUs, int sampleRate, int channels) {
         this.outputIndex = outIndex;
         this.outputBuffer = buffer;
         this.size = size;

@@ -350,11 +350,8 @@ public class STGLRender {
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
 
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFrameBuffers[bufIndex]);
-                // GLES30.glReadBuffer(GLES30.GL_COLOR_ATTACHMENT0);
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFrameBuffersResize[bufIndex]);
                 GLES20.glViewport(0, 0, mWidthResize, mHeightResize);
-                // GLES30.glBlitFramebuffer(0, 0, mViewPortWidth, mViewPortHeight, 0, 0,
-                // mWidthResize, mHeightResize, GLES30.GL_COLOR_BUFFER_BIT, GLES30.GL_NEAREST);
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
 

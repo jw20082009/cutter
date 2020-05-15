@@ -43,7 +43,6 @@ public class EditActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         mSurfaceView.onResume();
-        ALog.i(VideoContext.TAG, TAG + " onResume");
     }
 
     @Override

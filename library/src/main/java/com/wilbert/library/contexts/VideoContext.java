@@ -53,7 +53,7 @@ public class VideoContext {
         mRender = new VideoRenderer();
         mSurfaceView.setRenderer(mRender);
         mSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
-        new Thread(mFrameWorker).start();
+        new Thread(mFrameWorker, "VideoContext_Worker").start();
     }
 
     public void release() {
@@ -70,17 +70,11 @@ public class VideoContext {
             while (mPlaying.get()) {
                 if (mWorker != null) {
                     FrameInfo frameInfo = mWorker.getNextFrame();
-                    if (mFirstFrame) {
-                        ALog.i(TAG, "workeer worked");
-                    }
                     long timeElapse = -1;
                     boolean needRender = false;
                     if (frameInfo != null) {
                         try {
                             mFrameInfos.offerFirst(frameInfo, 40, TimeUnit.MILLISECONDS);
-                            if (mFirstFrame) {
-                                ALog.i(TAG, "worker offered");
-                            }
                             needRender = true;
                         } catch (InterruptedException e) {
                             e.printStackTrace();
@@ -114,8 +108,6 @@ public class VideoContext {
             }
         }
     };
-
-    boolean firstDraw = true;
 
     private class VideoRenderer implements GLSurfaceView.Renderer {
 
@@ -158,10 +150,6 @@ public class VideoContext {
 
         @Override
         public void onDrawFrame(GL10 gl) {
-            if (firstDraw) {
-                ALog.i(TAG, "onDrawFrame firstFrame");
-                firstDraw = false;
-            }
             if (mStatus == STATUS_RELEASING) {
                 _release();
                 changeStatus(STATUS_IDLE);

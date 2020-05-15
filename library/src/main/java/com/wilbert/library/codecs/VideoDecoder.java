@@ -166,17 +166,10 @@ public class VideoDecoder implements IDecoder {
         }
     }
 
-    private boolean firstInputIndex = true;
-    private boolean firstOutputIndex = true;
-
     private MediaCodec.Callback mCallback = new MediaCodec.Callback() {
 
         @Override
         public void onInputBufferAvailable(@NonNull MediaCodec codec, int index) {
-            if (firstInputIndex && index >= 0) {
-                ALog.i(VideoContext.TAG, TAG + ";onInputBufferAvailable:" + index);
-                firstInputIndex = false;
-            }
             if (index >= 0)
                 mInputBuffers.offerFirst(new InputInfo(index, codec.getInputBuffer(index)));
             else
@@ -185,10 +178,6 @@ public class VideoDecoder implements IDecoder {
 
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
-            if (firstOutputIndex && index >= 0) {
-                ALog.i(VideoContext.TAG, TAG + ";onOutputBufferAvailable:" + index);
-                firstOutputIndex = false;
-            }
             if (index >= 0 && mOutputFormat != null) {
                 FrameInfo frameInfo = new FrameInfo(index, codec.getOutputBuffer(index), info.size,
                         info.presentationTimeUs, mDecodeWidth, mDecodeHeight, mDecodeRotation);

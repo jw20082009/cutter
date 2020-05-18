@@ -19,7 +19,7 @@ import android.widget.Toast;
 import com.wilbert.cutter.R;
 import com.wilbert.library.camera.Renderer.STGLRender;
 import com.wilbert.library.codecs.abs.FrameInfo;
-import com.wilbert.library.contexts.NV21Renderer;
+import com.wilbert.library.contexts.yuv.NV21Renderer;
 import com.wilbert.library.frameprocessor.gles.OpenGLUtils;
 
 import java.io.IOException;

@@ -1,4 +1,4 @@
-package com.wilbert.library.contexts.abs;
+package com.wilbert.library.contexts.yuv;
 
 import com.wilbert.library.codecs.abs.FrameInfo;
 

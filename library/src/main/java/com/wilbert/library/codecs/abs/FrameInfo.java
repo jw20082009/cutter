@@ -35,9 +35,8 @@ public class FrameInfo {
         this.outputBuffer = buffer;
         this.size = size;
         this.presentationTimeUs = presentationTimeUs;
-        this.frameWidth = frameWidth;
-        this.frameHeight = frameHeight;
-        this.rotation = rotation;
+        this.sampleRate = sampleRate;
+        this.channels = channels;
     }
 
     public FrameInfo(ByteBuffer buffer, int frameWidth, int frameHeight, int rotation) {

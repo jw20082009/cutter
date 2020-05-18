@@ -11,8 +11,7 @@ import com.wilbert.library.codecs.abs.FrameInfo;
 import com.wilbert.library.codecs.abs.IExtractorListener;
 import com.wilbert.library.log.ALog;
 
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * author : Administrator
@@ -23,9 +22,15 @@ import java.util.concurrent.TimeUnit;
 public class VideoClip implements IVideoClip, IFrameWorker {
     private final String TAG = "VideoClip" + hashCode();
     private VideoExtractorWrapper mExtractor;
-    private boolean mPrepared = false;
     private String mFilePath = null;
-    private Semaphore mPermit = new Semaphore(1);
+
+    public static final int STATUS_RELEASED = 0x00;
+    public static final int STATUS_RELEASING = 0X01;
+    public static final int STATUS_PREPARING = 0x02;
+    public static final int STATUS_IDLE = 0x03;
+    public static final int STATUS_PREPARED = 0x04;
+
+    private AtomicInteger mStatus = new AtomicInteger(0);
 
     public VideoClip() {
     }
@@ -62,37 +67,27 @@ public class VideoClip implements IVideoClip, IFrameWorker {
 
     @Override
     public void prepare(String filePath) {
-        try {
-            mPermit.tryAcquire(1, 100, TimeUnit.MILLISECONDS);
-            if (TextUtils.isEmpty(filePath)) {
-                return;
-            }
-            if (mExtractor != null) {
-                mExtractor.release();
-            }
-            mFilePath = filePath;
-            mExtractor = new VideoExtractorWrapper();
-            mExtractor.setListener(extractorListener);
-            mExtractor.prepare(mFilePath, VideoExtractor.Type.VIDEO);
-            mPermit.release();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        if (TextUtils.isEmpty(filePath) || mStatus.get() >= STATUS_PREPARING) {
+            return;
         }
+        mStatus.set(STATUS_PREPARING);
+        if (mExtractor != null) {
+            mExtractor.release();
+        }
+        mFilePath = filePath;
+        mExtractor = new VideoExtractorWrapper();
+        mExtractor.setListener(extractorListener);
+        mExtractor.prepare(mFilePath, VideoExtractor.Type.VIDEO);
+        mStatus.set(STATUS_IDLE);
     }
 
     @Override
     public void seekTo(long timeUs) {
-        try {
-            mPermit.tryAcquire(1, 100, TimeUnit.MILLISECONDS);
-            if (!mPrepared) {
-                ALog.i(TAG, "seekTo:" + timeUs);
-                return;
-            }
-            mExtractor.seekTo(timeUs);
-            mPermit.release();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        if (mStatus.get() < STATUS_PREPARED) {
+            ALog.i(TAG, "seekTo:" + timeUs);
+            return;
         }
+        mExtractor.seekTo(timeUs);
     }
 
     @Override
@@ -102,47 +97,28 @@ public class VideoClip implements IVideoClip, IFrameWorker {
 
     @Override
     public FrameInfo getNextFrame() {
-        FrameInfo frameInfo = null;
-        try {
-            mPermit.tryAcquire(1, 100, TimeUnit.MILLISECONDS);
-            if (!mPrepared) {
-                ALog.i(TAG, "getNextFrame when not prepared");
-                return null;
-            }
-            frameInfo = mExtractor.getNextFrameBuffer();
-            mPermit.release();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        return frameInfo;
+        if (mStatus.get() < STATUS_IDLE)
+            return null;
+        return mExtractor.getNextFrameBuffer();
     }
 
     @Override
     public void releaseFrame(FrameInfo frameInfo) {
-        try {
-            mPermit.tryAcquire(1, 100, TimeUnit.MILLISECONDS);
-            if (!mPrepared) {
-                ALog.i(TAG, "releaseFrame when not prepared");
-                return;
-            }
-            mExtractor.releaseFrameBuffer(frameInfo);
-            mPermit.release();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        if (mStatus.get() < STATUS_IDLE) {
+            ALog.i(TAG, "releaseFrame when not prepared");
+            return;
         }
+        mExtractor.releaseFrameBuffer(frameInfo);
     }
 
+    @Override
     public void release() {
-        try {
-            mPermit.tryAcquire(1, 100, TimeUnit.MILLISECONDS);
-            if (mExtractor != null) {
-                mExtractor.release();
-                mExtractor = null;
-                mPrepared = false;
-            }
-            mPermit.release();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        if (mStatus.get() <= STATUS_RELEASING)
+            return;
+        mStatus.set(STATUS_RELEASING);
+        if (mExtractor != null) {
+            mExtractor.release();
+            mExtractor = null;
         }
     }
 
@@ -156,12 +132,13 @@ public class VideoClip implements IVideoClip, IFrameWorker {
 
         @Override
         public void onPrepared(VideoExtractorWrapper extractor) {
-            mPrepared = true;
+            mStatus.set(STATUS_PREPARED);
             mExtractor.start();
         }
 
         @Override
         public void onReleased(VideoExtractorWrapper extractor) {
+            mStatus.set(STATUS_RELEASED);
         }
 
         @Override

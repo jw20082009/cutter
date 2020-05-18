@@ -7,8 +7,15 @@ package com.wilbert.library.clips.abs;
  * desc   :
  */
 public interface IAudioClip {
+    void prepare(String filepath);
+
+    String getFilepath();
+
     int getChannels();
+
     int getSampleRate();
+
     long getDuration();
+
     int getBitrate();
 }

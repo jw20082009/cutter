@@ -5,7 +5,9 @@ import android.opengl.GLSurfaceView;
 
 import com.wilbert.library.clips.abs.IFrameWorker;
 import com.wilbert.library.codecs.abs.FrameInfo;
-import com.wilbert.library.contexts.abs.IYuvRenderer;
+import com.wilbert.library.contexts.abs.ITimeline;
+import com.wilbert.library.contexts.yuv.IYuvRenderer;
+import com.wilbert.library.contexts.yuv.NV21Renderer;
 import com.wilbert.library.frameprocessor.gles.OpenGLUtils;
 import com.wilbert.library.frameprocessor.gles.TextureRotationUtils;
 import com.wilbert.library.log.ALog;
@@ -39,7 +41,7 @@ public class VideoContext {
     private int mInputTextureHandle;
     private int mCoordsPerVertex = TextureRotationUtils.CoordsPerVertex;
     private int mVertexCount = TextureRotationUtils.CubeVertices.length / mCoordsPerVertex;
-    private Timeline mTimeline = new Timeline();
+    private ITimeline mTimeline;
     private FloatBuffer mVertexBuffer;
     private FloatBuffer mTextureBuffer;
     private VideoRenderer mRender;
@@ -47,9 +49,10 @@ public class VideoContext {
     private Object mSync = new Object();
 
 
-    public VideoContext(GLSurfaceView surfaceView, IFrameWorker worker) {
+    public VideoContext(GLSurfaceView surfaceView, IFrameWorker worker, ITimeline timeline) {
         mWorker = worker;
         mSurfaceView = surfaceView;
+        mTimeline = timeline;
         mSurfaceView.setEGLContextClientVersion(2);
         mRender = new VideoRenderer();
         mSurfaceView.setRenderer(mRender);
@@ -75,7 +78,7 @@ public class VideoContext {
                     boolean needRender = false;
                     if (frameInfo != null) {
                         try {
-                            mFrameInfos.offerFirst(frameInfo, 40, TimeUnit.MILLISECONDS);
+                            mFrameInfos.putFirst(frameInfo);
                             needRender = true;
                         } catch (InterruptedException e) {
                             e.printStackTrace();
@@ -162,13 +165,8 @@ public class VideoContext {
                 ALog.i(TAG, "onDrawFrame null worker");
                 return;
             }
-            FrameInfo frameInfo = null;
-            try {
-                frameInfo = mFrameInfos.pollLast(40, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            if (frameInfo == null) {
+            FrameInfo frameInfo = mFrameInfos.pollLast();//(10, TimeUnit.MILLISECONDS);
+            if (frameInfo == null || frameInfo.size <= 0) {
                 ALog.i(TAG, "onDrawFrame null frameInfo");
                 return;
             }

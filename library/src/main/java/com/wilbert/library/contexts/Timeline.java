@@ -36,9 +36,6 @@ public class Timeline implements ITimeline {
     @Override
     public long pause() {
         synchronized (mLock) {
-            if (mPauseTime <= mStartTime) {
-                return 0;
-            }
             long currentTime = SystemClock.elapsedRealtimeNanos();
             long pts = 0;
             if (mPauseTime <= 0) {
@@ -74,6 +71,13 @@ public class Timeline implements ITimeline {
     }
 
     @Override
+    public boolean isPlaying() {
+        synchronized (mLock) {
+            return mPauseTime <= mStartTime;
+        }
+    }
+
+    @Override
     public long compareTime(long timeUs) {
         synchronized (mLock) {
             if (timeUs < 0)
@@ -83,7 +87,7 @@ public class Timeline implements ITimeline {
                 long currentTime = SystemClock.elapsedRealtimeNanos();
                 result = timeUs * 1000 + mStartTime - currentTime;
             } else {
-                result = timeUs + mStartTime - mPauseTime;
+                result = timeUs * 1000 + mStartTime - mPauseTime;
             }
             return result / 1000;
         }

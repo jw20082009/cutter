@@ -19,6 +19,8 @@ import java.io.FileDescriptor;
 import java.io.IOException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * author : wilbert
@@ -28,14 +30,25 @@ import java.util.concurrent.TimeUnit;
  */
 public class VideoExtractorWrapper implements IExtractor {
     private final String TAG = "ExtractorWrapper";
+
+    public static int STATUS_RELEASED = 0x00;
+    public static int STATUS_RELEASING = 0x01;
+    public static int STATUS_PREPARING = 0x02;
+    public static int STATUS_PREPARING_EXTRACTOR = 0x03;
+    public static int STATUS_PREPARING_DECODER = 0x04;
+    public static int STATUS_PREPARED = 0x05;
+    public static int STATUS_STARTING = 0x06;
+    public static int STATUS_STARTED = 0x07;
+
+    private AtomicInteger mStatus = new AtomicInteger(STATUS_RELEASED);
+
     private VideoExtractor mExtractor;
     private MediaFormat mFormat;
     private ExtractorHandler mHandler;
     private DecodeHandler mDecodeHandler;
     private IExtractorListener mListener;
     private String mFilePath = null;
-    private boolean mPrepared = false;
-    private boolean mReleasing = false;
+
     private IDecoder mDecoder;
     private Semaphore mReleasePhore = new Semaphore(2);
     private Semaphore mDecodePhore = new Semaphore(0);
@@ -46,89 +59,86 @@ public class VideoExtractorWrapper implements IExtractor {
 
     @Override
     public void prepare(String filePath, VideoExtractor.Type type) {
-        synchronized (mLock) {
-            initHandler();
-            mFilePath = filePath;
-            mHandler.removeMessages(MSG_PREPARE_EXTRACTOR);
-            Message prepareMessage = mHandler.obtainMessage(MSG_PREPARE_EXTRACTOR);
-            prepareMessage.obj = type;
-            prepareMessage.sendToTarget();
-            mDecodeHandler.removeMessages(MSG_PREPARE_DECODER);
-            Message decodeMessage = mDecodeHandler.obtainMessage(MSG_PREPARE_DECODER);
-            decodeMessage.sendToTarget();
-        }
+        if (mStatus.get() >= STATUS_PREPARING)
+            return;
+        mStatus.set(STATUS_PREPARING);
+        initHandler();
+        mFilePath = filePath;
+        mHandler.removeMessages(MSG_PREPARE_EXTRACTOR);
+        Message prepareMessage = mHandler.obtainMessage(MSG_PREPARE_EXTRACTOR);
+        prepareMessage.obj = type;
+        prepareMessage.sendToTarget();
+        mDecodeHandler.removeMessages(MSG_PREPARE_DECODER);
+        Message decodeMessage = mDecodeHandler.obtainMessage(MSG_PREPARE_DECODER);
+        decodeMessage.sendToTarget();
     }
 
     @Override
     public void start() {
-        synchronized (mLock) {
-            initHandler();
-            if (!mHandler.hasMessages(MSG_FEED_BUFFER)) {
-                mHandler.sendEmptyMessage(MSG_FEED_BUFFER);
-            }
+        if (mStatus.get() == STATUS_STARTING || mStatus.get() < STATUS_PREPARING)
+            return;
+        mStatus.set(STATUS_STARTING);
+        initHandler();
+        if (!mHandler.hasMessages(MSG_FEED_BUFFER)) {
+            mHandler.sendEmptyMessage(MSG_FEED_BUFFER);
         }
+        mStatus.set(STATUS_STARTED);
     }
 
     @Override
     public FrameInfo getNextFrameBuffer() {
-        synchronized (mLock) {
-            if (!mPrepared)
-                return null;
-            FrameInfo frameInfo = mDecoder.dequeueOutputBuffer();
-            if (!mHandler.hasMessages(MSG_FEED_BUFFER)) {
-                mHandler.sendEmptyMessage(MSG_FEED_BUFFER);
-            }
-            return frameInfo;
+        if (mStatus.get() < STATUS_PREPARING_DECODER)
+            return null;
+        FrameInfo frameInfo = mDecoder.dequeueOutputBuffer();
+        if (!mHandler.hasMessages(MSG_FEED_BUFFER)) {
+            mHandler.sendEmptyMessage(MSG_FEED_BUFFER);
         }
+        return frameInfo;
     }
 
     @Override
     public void releaseFrameBuffer(FrameInfo frameInfo) {
-        synchronized (mLock) {
-            if (!mPrepared || frameInfo == null)
-                return;
-            mDecoder.queueOutputBuffer(frameInfo);
-        }
+        if (mStatus.get() < STATUS_PREPARED || frameInfo == null)
+            return;
+        mDecoder.queueOutputBuffer(frameInfo);
     }
 
     @Override
     public void seekTo(long timeUs) {
-        synchronized (mLock) {
-            if (!mPrepared) {
-                return;
-            }
-            mHandler.removeMessages(MSG_FEED_BUFFER);
-            mHandler.removeMessages(MSG_SEEK);
-            Message seekMessage = mHandler.obtainMessage(MSG_SEEK);
-            seekMessage.obj = timeUs;
-            seekMessage.sendToTarget();
-            mHandler.removeMessages(MSG_FEED_BUFFER);
-            mHandler.sendEmptyMessage(MSG_FEED_BUFFER);
+        if (mStatus.get() < STATUS_PREPARED) {
+            return;
         }
+        mHandler.removeMessages(MSG_FEED_BUFFER);
+        mHandler.removeMessages(MSG_SEEK);
+        Message seekMessage = mHandler.obtainMessage(MSG_SEEK);
+        seekMessage.obj = timeUs;
+        seekMessage.sendToTarget();
+        mHandler.removeMessages(MSG_FEED_BUFFER);
+        mHandler.sendEmptyMessage(MSG_FEED_BUFFER);
     }
 
     @Override
     public MediaFormat getMediaFormat() {
-        synchronized (mLock) {
-            if (mPrepared) {
-                return mFormat;
-            }
+        if (mStatus.get() < STATUS_PREPARED) {
+            return null;
         }
-        return null;
+        return mFormat;
     }
 
     @Override
     public void setListener(IExtractorListener listener) {
-        this.mListener = listener;
+        synchronized (mLock) {
+            this.mListener = listener;
+        }
     }
 
     @Override
     public void release() {
-        synchronized (mLock) {
-            mReleasing = true;
-            mHandler.release();
-            mDecodeHandler.release();
-        }
+        if (mStatus.get() < STATUS_RELEASING)
+            return;
+        mStatus.set(STATUS_RELEASING);
+        mHandler.release();
+        mDecodeHandler.release();
     }
 
     private void initHandler() {
@@ -148,11 +158,10 @@ public class VideoExtractorWrapper implements IExtractor {
             mExtractor = null;
             mReleasePhore.release(1);
             if (mReleasePhore.availablePermits() <= 0) {
+                mStatus.set(STATUS_RELEASED);
                 notifyReleased();
-                mReleasing = false;
             }
         }
-        mPrepared = false;
     }
 
     private final int MSG_PREPARE_EXTRACTOR = 0x01;
@@ -177,7 +186,7 @@ public class VideoExtractorWrapper implements IExtractor {
                     }
                     try {
                         mExtractor = new VideoExtractor();
-                        long start = System.currentTimeMillis();
+                        mStatus.set(STATUS_PREPARING_EXTRACTOR);
                         if (!TextUtils.isEmpty(mFilePath)) {
                             mExtractor.prepare(mFilePath, (VideoExtractor.Type) msg.obj);
                         } else {
@@ -185,17 +194,17 @@ public class VideoExtractorWrapper implements IExtractor {
                         }
                         try {
                             mFormat = mExtractor.getMediaFormat();
-                            mDecodePhore.release(1);
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
+                        mDecodePhore.release(1);
                     } catch (IOException e) {
                         e.printStackTrace();
                         notifyonError(e);
                     }
                     break;
                 case MSG_FEED_BUFFER:
-                    if (!mPrepared)
+                    if (mStatus.get() < STATUS_PREPARED)
                         break;
                     if (firstFrame) {
                         firstFrame = false;
@@ -206,12 +215,12 @@ public class VideoExtractorWrapper implements IExtractor {
                         inputInfo.lastFrameFlag = time == -1 ? true : false;
                         mDecoder.queueInputBuffer(inputInfo);
                     }
-                    if (!mReleasing) {
+                    if (mStatus.get() >= STATUS_PREPARED) {
                         sendEmptyMessage(MSG_FEED_BUFFER);
                     }
                     break;
                 case MSG_SEEK: {
-                    if (!mPrepared) {
+                    if (mStatus.get() < STATUS_PREPARED) {
                         break;
                     }
                     Object tag = msg.obj;
@@ -227,6 +236,8 @@ public class VideoExtractorWrapper implements IExtractor {
         }
 
         public void release() {
+            mDecoder.queueInputBuffer(null);
+            mDecoder.queueOutputBuffer(null);
             post(new Runnable() {
                 @Override
                 public void run() {
@@ -250,16 +261,17 @@ public class VideoExtractorWrapper implements IExtractor {
             super.handleMessage(msg);
             switch (msg.what) {
                 case MSG_PREPARE_DECODER:
-                    long start = System.currentTimeMillis();
-                    mDecoder = new VideoDecoder();
                     try {
-                        mDecodePhore.tryAcquire(1, 300, TimeUnit.MILLISECONDS);
+                        mDecoder = new VideoDecoder();
+                        mStatus.set(STATUS_PREPARING_DECODER);
+                        mDecodePhore.acquire();
                         if (mFormat != null) {
                             mDecoder.prepare(mFormat);
                         }
                     } catch (InterruptedException | IOException e) {
                         e.printStackTrace();
                     }
+                    mStatus.set(STATUS_PREPARED);
                     notifyPrepared();
                     break;
             }
@@ -273,8 +285,8 @@ public class VideoExtractorWrapper implements IExtractor {
                         mDecoder.release();
                         mReleasePhore.release(1);
                         if (mReleasePhore.availablePermits() <= 0) {
+                            mStatus.set(STATUS_RELEASED);
                             notifyReleased();
-                            mReleasing = false;
                         }
                         mDecoder = null;
                     }
@@ -286,7 +298,6 @@ public class VideoExtractorWrapper implements IExtractor {
 
     private void notifyPrepared() {
         synchronized (mLock) {
-            mPrepared = true;
             if (mListener != null) {
                 mListener.onPrepared(VideoExtractorWrapper.this);
             }

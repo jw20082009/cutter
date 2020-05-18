@@ -1,9 +1,8 @@
-package com.wilbert.library.contexts;
+package com.wilbert.library.contexts.yuv;
 
 import android.opengl.GLES20;
 
 import com.wilbert.library.codecs.abs.FrameInfo;
-import com.wilbert.library.contexts.abs.IYuvRenderer;
 import com.wilbert.library.frameprocessor.gles.OpenGLUtils;
 import com.wilbert.library.frameprocessor.gles.TextureRotationUtils;
 import com.wilbert.library.frameprocessor.glutils.TextureRotationUtil;
@@ -15,10 +14,11 @@ import java.nio.FloatBuffer;
 /**
  * author : wilbert
  * e-mail : jw20082009@qq.com
- * time   : 2020/05/11
+ * time   : 2020/05/15
  * desc   :
  */
-public class NV21Renderer implements IYuvRenderer {
+
+public class YUV420pRenderer implements IYuvRenderer {
 
     private static final String YUV_INPUT_VERTEX_SHADER = "" + "attribute vec4 position;\n"
             + "attribute vec4 inputTextureCoordinate;\n" + "\n"
@@ -29,47 +29,18 @@ public class NV21Renderer implements IYuvRenderer {
     private static final String YUV_TEXTURE = "precision mediump float;                           \n"
             + "varying vec2 textureCoordinate;                           \n"
             + "uniform sampler2D y_texture;                       \n"
-            + "uniform sampler2D uv_texture;                      \n"
+            + "uniform sampler2D u_texture;                      \n"
+            + "uniform sampler2D v_texture;                      \n"
             + "void main (void){                                  \n"
-            + "   float y = texture2D(y_texture, textureCoordinate).r;        \n"
-
-            // We had put the Y values of each pixel to the R,G,B components by
-            // GL_LUMINANCE,
-            // that's why we're pulling it from the R component, we could also use G or B
-            + "   vec2 uv = texture2D(uv_texture, textureCoordinate).xw - 0.5;       \n"
-
-            // The numbers are just YUV to RGB conversion constants
-            + "   float b = y + 1.370705 * uv.x;\n"
-            + "   float g = y - 0.698001 * uv.x - 0.337633 * uv.y;\n"
-            + "   float r = y + 1.732446 * uv.y;\n      " +
-            // We finally set the RGB color of our pixel
-            // 摄像头返回的NV21数据与MediaCodec（Redmi Note 5）解码返回的yuv数据不同
-            // NV21数据：b = y + 1.732446 * uv.y;   r = y + 1.370705 * uv.x;"
-            // MediaCodec解码数据：b = y + 1.370705 * uv.x;   r = y + 1.732446 * uv.y;
-            "   gl_FragColor = vec4(r, g, b, 1.0);              \n"
-            + "}";
-
-    private static final String YUV_TEXTURE2 = "precision mediump float;                           \n"
-            + "varying vec2 textureCoordinate;                           \n"
-            + "uniform sampler2D y_texture;                       \n"
-            + "uniform sampler2D uv_texture;                      \n"
-            + "void main (void){                                  \n"
-            + "   float y = texture2D(y_texture, textureCoordinate).r;        \n"
-
-            // We had put the Y values of each pixel to the R,G,B components by
-            // GL_LUMINANCE,
-            // that's why we're pulling it from the R component, we could also use G or B
-            + "   vec2 uv = texture2D(uv_texture, textureCoordinate).xw - 0.5;       \n"
-
-            // The numbers are just YUV to RGB conversion constants
-            + "   float r = y + 1.370705 * uv.x;\n"
-            + "   float g = y - 0.698001 * uv.x - 0.337633 * uv.y;\n"
-            + "   float b = y + 1.732446 * uv.y;\n      " +
-            // We finally set the RGB color of our pixel
-            // 摄像头返回的NV21数据与MediaCodec（Redmi Note 5）解码返回的yuv数据不同
-            // NV21数据：b = y + 1.732446 * uv.y;   r = y + 1.370705 * uv.x;"
-            // MediaCodec解码数据：b = y + 1.370705 * uv.x;   r = y + 1.732446 * uv.y;
-            "   gl_FragColor = vec4(r, g, b, 1.0);              \n"
+            + "   vec3 yuv;"
+            + "   float x = textureCoordinate.x;        \n"
+            + "   float y = textureCoordinate.y;"
+            + "   vec2 cord = vec2(x,y);"
+            + "   yuv.x = texture2D(y_texture,cord).r;"
+            + "   yuv.y = texture2D(u_texture,cord).r - 0.5;"
+            + "   yuv.z = texture2D(v_texture,cord).r - 0.5;"
+            + "   yuv.x = 1.1643 * yuv.x - 0.0728;"
+            + "   gl_FragColor = vec4(yuv.x + 1.5958 * yuv.z,yuv.x - 0.39173 * yuv.y -0.8129 * yuv.z,yuv.x + 2.017 * yuv.y,1.0);"
             + "}";
 
     private int mSurfaceWidth = -1;
@@ -78,7 +49,8 @@ public class NV21Renderer implements IYuvRenderer {
     private int yuvPositionLoc = -1;
     private int yuvTextureLoc = -1;
     private int yTextureLoc = -1;
-    private int uvTextureLoc = -1;
+    private int uTextureLoc = -1;
+    private int vTextureLoc = -1;
     private int[] mTextureY;
     private int[] mTextureUV;
     private int[] mFrameBuffers;
@@ -90,31 +62,23 @@ public class NV21Renderer implements IYuvRenderer {
     private boolean mIsInitialized = false;
     private final int TEXTURE_TYPE = GLES20.GL_TEXTURE_2D;
 
-    public interface Type {
-        int CAMERA_PREVIEW = 0X01;
-        int DECODE_PREVIEW = 0x02;
-    }
-
-    private int mType = Type.DECODE_PREVIEW;
-
-    public NV21Renderer() {
+    public YUV420pRenderer() {
         mTextureBuffer = ByteBuffer.allocateDirect(TextureRotationUtil.TEXTURE_NO_ROTATION.length * 4)
                 .order(ByteOrder.nativeOrder()).asFloatBuffer();
         mTextureBuffer.put(TextureRotationUtil.TEXTURE_NO_ROTATION).position(0);
-    }
-
-    public NV21Renderer(int type) {
-        this();
-        mType = type;
+        mVertexBuffer = ByteBuffer.allocateDirect(TextureRotationUtil.CUBE.length * 4)
+                .order(ByteOrder.nativeOrder()).asFloatBuffer();
+        mVertexBuffer.put(TextureRotationUtil.CUBE).position(0);
     }
 
     @Override
     public void onSurfaceCreated() {
-        mProgramIn = OpenGLUtils.createProgram(YUV_INPUT_VERTEX_SHADER, mType == Type.DECODE_PREVIEW ? YUV_TEXTURE : YUV_TEXTURE2);
+        mProgramIn = OpenGLUtils.createProgram(YUV_INPUT_VERTEX_SHADER, YUV_TEXTURE);
         yuvPositionLoc = GLES20.glGetAttribLocation(mProgramIn, "position");
         yuvTextureLoc = GLES20.glGetAttribLocation(mProgramIn, "inputTextureCoordinate");
         yTextureLoc = GLES20.glGetUniformLocation(mProgramIn, "y_texture");
-        uvTextureLoc = GLES20.glGetUniformLocation(mProgramIn, "uv_texture");
+        uTextureLoc = GLES20.glGetUniformLocation(mProgramIn, "u_texture");
+        vTextureLoc = GLES20.glGetUniformLocation(mProgramIn, "v_texture");
     }
 
     @Override
@@ -194,9 +158,19 @@ public class NV21Renderer implements IYuvRenderer {
                 GLES20.GL_CLAMP_TO_EDGE);
 
         // nv21 uv texture
-        mTextureUV = new int[1];
-        GLES20.glGenTextures(1, mTextureUV, 0);
+        mTextureUV = new int[2];
+        GLES20.glGenTextures(2, mTextureUV, 0);
         GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[0]);
+        GLES20.glTexParameteri(TEXTURE_TYPE, GLES20.GL_TEXTURE_MAG_FILTER,
+                GLES20.GL_NEAREST);
+        GLES20.glTexParameteri(TEXTURE_TYPE, GLES20.GL_TEXTURE_MIN_FILTER,
+                GLES20.GL_NEAREST);
+        GLES20.glTexParameteri(TEXTURE_TYPE, GLES20.GL_TEXTURE_WRAP_S,
+                GLES20.GL_CLAMP_TO_EDGE);
+        GLES20.glTexParameteri(TEXTURE_TYPE, GLES20.GL_TEXTURE_WRAP_T,
+                GLES20.GL_CLAMP_TO_EDGE);
+
+        GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[1]);
         GLES20.glTexParameteri(TEXTURE_TYPE, GLES20.GL_TEXTURE_MAG_FILTER,
                 GLES20.GL_NEAREST);
         GLES20.glTexParameteri(TEXTURE_TYPE, GLES20.GL_TEXTURE_MIN_FILTER,
@@ -207,21 +181,42 @@ public class NV21Renderer implements IYuvRenderer {
                 GLES20.GL_CLAMP_TO_EDGE);
     }
 
-    private void updateNV21YUVTexture(FrameInfo frameInfo) {
+    private void updateYUVTexture(FrameInfo frameInfo) {
         if (frameInfo == null) {
             return;
+        }
+        int align;
+        if (frameInfo.frameWidth % 8 == 0) {
+            align = 4;
+        } else if (frameInfo.frameWidth % 4 == 0) {
+            align = 2;
+        } else {
+            align = 1;
+        }
+        if (align != 4) {
+            GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, align);
         }
         ByteBuffer frameRenderBuffer = frameInfo.outputBuffer;
         if (!mTextureInit) {
             frameRenderBuffer.position(0);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureY[0]);
             GLES20.glTexImage2D(TEXTURE_TYPE, 0, GLES20.GL_LUMINANCE, frameInfo.frameWidth,
                     frameInfo.frameHeight, 0, GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE,
                     frameRenderBuffer);
+
             frameRenderBuffer.position(frameInfo.frameHeight * frameInfo.frameWidth);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[0]);
-            GLES20.glTexImage2D(TEXTURE_TYPE, 0, GLES20.GL_LUMINANCE_ALPHA,
-                    frameInfo.frameWidth / 2, frameInfo.frameHeight / 2, 0, GLES20.GL_LUMINANCE_ALPHA,
+            GLES20.glTexImage2D(TEXTURE_TYPE, 0, GLES20.GL_LUMINANCE,
+                    frameInfo.frameWidth / 2, frameInfo.frameHeight / 2, 0, GLES20.GL_LUMINANCE,
+                    GLES20.GL_UNSIGNED_BYTE, frameRenderBuffer);
+
+            frameRenderBuffer.position(frameInfo.frameHeight * frameInfo.frameWidth * 5 / 4);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE2);
+            GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[1]);
+            GLES20.glTexImage2D(TEXTURE_TYPE, 0, GLES20.GL_LUMINANCE,
+                    frameInfo.frameWidth / 2, frameInfo.frameHeight / 2, 0, GLES20.GL_LUMINANCE,
                     GLES20.GL_UNSIGNED_BYTE, frameRenderBuffer);
             mTextureInit = true;
         } else {
@@ -230,10 +225,21 @@ public class NV21Renderer implements IYuvRenderer {
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureY[0]);
             GLES20.glTexSubImage2D(TEXTURE_TYPE, 0, 0, 0, frameInfo.frameWidth, frameInfo.frameHeight,
                     GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, frameRenderBuffer);
+
             frameRenderBuffer.position(frameInfo.frameWidth * frameInfo.frameHeight);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[0]);
             GLES20.glTexSubImage2D(TEXTURE_TYPE, 0, 0, 0, frameInfo.frameWidth / 2, frameInfo.frameHeight / 2,
-                    GLES20.GL_LUMINANCE_ALPHA, GLES20.GL_UNSIGNED_BYTE, frameRenderBuffer);
+                    GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, frameRenderBuffer);
+
+            frameRenderBuffer.position(frameInfo.frameWidth * frameInfo.frameHeight * 5 / 4);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE2);
+            GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[1]);
+            GLES20.glTexSubImage2D(TEXTURE_TYPE, 0, 0, 0, frameInfo.frameWidth / 2, frameInfo.frameHeight / 2,
+                    GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, frameRenderBuffer);
+        }
+        if (align != 4) {
+            GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 4);
         }
     }
 
@@ -247,7 +253,7 @@ public class NV21Renderer implements IYuvRenderer {
         if (!mIsInitialized) {
             return -1;
         }
-        updateNV21YUVTexture(frameInfo);
+        updateYUVTexture(frameInfo);
         if (mVertexBuffer == null) {
             calculateVertexBuffer(mSurfaceWidth, mSurfaceHeight, frameInfo.frameWidth, frameInfo.frameHeight);
         }
@@ -268,7 +274,12 @@ public class NV21Renderer implements IYuvRenderer {
         if (mTextureUV[0] != -1) {
             GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
             GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[0]);
-            GLES20.glUniform1i(uvTextureLoc, 1);
+            GLES20.glUniform1i(uTextureLoc, 1);
+        }
+        if (mTextureUV[1] != -1) {
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE2);
+            GLES20.glBindTexture(TEXTURE_TYPE, mTextureUV[1]);
+            GLES20.glUniform1i(vTextureLoc, 2);
         }
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFrameBuffers[0]);
         GLES20.glViewport(0, 0, frameInfo.frameWidth, frameInfo.frameHeight);
@@ -291,7 +302,6 @@ public class NV21Renderer implements IYuvRenderer {
             GLES20.glDeleteTextures(1, mFrameBufferTextures, 0);
             mFrameBufferTextures = null;
         }
-
         if (mFrameBuffers != null) {
             GLES20.glDeleteFramebuffers(1, mFrameBuffers, 0);
             mFrameBuffers = null;

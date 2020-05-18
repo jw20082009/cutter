@@ -16,6 +16,8 @@ public interface ITimeline {
 
     long seekTo(long timeUs);
 
+    boolean isPlaying();
+
     long compareTime(long timeUs);
 
     long getCurrentTime();

@@ -13,4 +13,6 @@ public interface IFrameWorker {
     FrameInfo getNextFrame();
 
     void releaseFrame(FrameInfo frameInfo);
+
+    void release();
 }

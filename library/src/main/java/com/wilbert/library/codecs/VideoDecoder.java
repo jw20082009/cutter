@@ -28,8 +28,8 @@ public class VideoDecoder implements IDecoder {
     private MediaFormat mOutputFormat;
     private InputInfo mCurrentInputInfo = null;
     private FrameInfo mCurrentFrameInfo = null;
-    private LinkedBlockingDeque<InputInfo> mInputBuffers = new LinkedBlockingDeque<>(6);
-    private LinkedBlockingDeque<FrameInfo> mOutputBuffers = new LinkedBlockingDeque<>(4);
+    private LinkedBlockingDeque<InputInfo> mInputBuffers = new LinkedBlockingDeque<>(10);
+    private LinkedBlockingDeque<FrameInfo> mOutputBuffers = new LinkedBlockingDeque<>(10);
     private int mType = 0;//0:video;1:audio;
     private int mDecodeWidth = 0;
     private int mDecodeHeight = 0;
@@ -113,27 +113,30 @@ public class VideoDecoder implements IDecoder {
             ALog.i(TAG, "dequeueInputBuffer same frame again");
             return null;
         }
+        ALog.i(TAG, "dequeueInputBuffer,type:" + mType);
         try {
-            mCurrentInputInfo = mInputBuffers.pollLast(100, TimeUnit.MILLISECONDS);
+            mCurrentInputInfo = mInputBuffers.takeLast();
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
         if (mCurrentInputInfo != null) {
-            ALog.i(TAG, "dequeueInputBuffer:" + mCurrentInputInfo.time + ";bufferIndex:" + mCurrentInputInfo.inputIndex);
+            ALog.i(TAG, "dequeueInputBuffer:" + mCurrentInputInfo.time + ";bufferIndex:" + mCurrentInputInfo.inputIndex + ";inputSize:" + mInputBuffers.size() + ";" + mType);
         }
         return mCurrentInputInfo;
     }
 
     @Override
     public void queueInputBuffer(InputInfo inputInfo) {
-        if (mDecoder != null && inputInfo != null) {
+        if (mDecoder != null) {
             if (inputInfo != null) {
-                ALog.i(TAG, "queueInputBuffer,time:" + inputInfo.time + ";size:" + inputInfo.size + ";flag:" + inputInfo.lastFrameFlag + ";index:" + inputInfo.inputIndex);
-            }
-            mDecoder.queueInputBuffer(inputInfo.inputIndex, 0, inputInfo.size <= 0 ? 0 : inputInfo.size,
-                    inputInfo.time <= 0 ? 0 : inputInfo.time, inputInfo.lastFrameFlag ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
-            if (mCurrentInputInfo != null && mCurrentInputInfo.inputIndex == inputInfo.inputIndex) {
-                mCurrentInputInfo = null;
+                ALog.i(TAG, "queueInputBuffer,time:" + inputInfo.time + ";size:" + inputInfo.size + ";flag:" + inputInfo.lastFrameFlag + ";index:" + inputInfo.inputIndex + ";" + mType);
+                mDecoder.queueInputBuffer(inputInfo.inputIndex, 0, inputInfo.size <= 0 ? 0 : inputInfo.size,
+                        inputInfo.time <= 0 ? 0 : inputInfo.time, inputInfo.lastFrameFlag ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
+                if (mCurrentInputInfo != null && mCurrentInputInfo.inputIndex == inputInfo.inputIndex) {
+                    mCurrentInputInfo = null;
+                }
+            } else {
+                mInputBuffers.offerFirst(new InputInfo(-1, null));
             }
         }
     }
@@ -149,25 +152,27 @@ public class VideoDecoder implements IDecoder {
             return null;
         }
         try {
-            mCurrentFrameInfo = mOutputBuffers.pollLast(100, TimeUnit.MILLISECONDS);
+            mCurrentFrameInfo = mOutputBuffers.takeLast();
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
         if (mCurrentFrameInfo != null) {
-            //ALog.i(TAG, "dequeueOutputBuffer:" + mCurrentFrameInfo.presentationTimeUs + ";bufferIndex:" + mCurrentFrameInfo.outputIndex);
+            ALog.i(TAG, "dequeueOutputBuffer:" + mCurrentFrameInfo.presentationTimeUs + ";bufferIndex:" + mCurrentFrameInfo.outputIndex + ";" + mType);
         }
         return mCurrentFrameInfo;
     }
 
     @Override
     public void queueOutputBuffer(FrameInfo frameInfo) {
-        if (mDecoder != null && frameInfo != null) {
+        if (mDecoder != null) {
             if (frameInfo != null) {
-                //ALog.i(TAG, "releaseOutputBuffer:" + frameInfo.presentationTimeUs + ";bufferIndex:" + mCurrentFrameInfo.outputIndex);
-            }
-            mDecoder.releaseOutputBuffer(frameInfo.outputIndex, false);
-            if (mCurrentFrameInfo != null && mCurrentFrameInfo.outputIndex == frameInfo.outputIndex) {
-                mCurrentFrameInfo = null;
+                ALog.i(TAG, "releaseOutputBuffer:" + frameInfo.presentationTimeUs + ";bufferIndex:" + mCurrentFrameInfo.outputIndex + ";" + mType);
+                mDecoder.releaseOutputBuffer(frameInfo.outputIndex, false);
+                if (mCurrentFrameInfo != null && mCurrentFrameInfo.outputIndex == frameInfo.outputIndex) {
+                    mCurrentFrameInfo = null;
+                }
+            } else {
+                mOutputBuffers.offerFirst(new FrameInfo(null, -1, -1, -1));
             }
         }
     }
@@ -176,14 +181,20 @@ public class VideoDecoder implements IDecoder {
 
         @Override
         public void onInputBufferAvailable(@NonNull MediaCodec codec, int index) {
-            if (index >= 0)
-                mInputBuffers.offerFirst(new InputInfo(index, codec.getInputBuffer(index)));
-            else
+            if (index >= 0) {
+                try {
+                    ALog.i(TAG, "onInputBufferAvailable,index:" + index + ";" + mType);
+                    mInputBuffers.putFirst(new InputInfo(index, codec.getInputBuffer(index)));
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            } else
                 ALog.i(TAG, "onInputBufferAvailable:" + index);
         }
 
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
+            ALog.i(TAG, "onOutputBufferAvailable,index:" + index + ";" + mType);
             if (index >= 0 && mOutputFormat != null) {
                 FrameInfo frameInfo = null;
                 if (mType == 0) {
@@ -191,10 +202,14 @@ public class VideoDecoder implements IDecoder {
                             info.presentationTimeUs, mDecodeWidth, mDecodeHeight, mDecodeRotation);
                 } else if (mType == 1) {
                     frameInfo = new FrameInfo(index, codec.getOutputBuffer(index), info.size,
-                            info.presentationTimeUs, mChannelCount, mSampleRate);
+                            info.presentationTimeUs, mSampleRate, mChannelCount);
                 }
                 if (frameInfo != null) {
-                    mOutputBuffers.offerFirst(frameInfo);
+                    try {
+                        mOutputBuffers.putFirst(frameInfo);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
             } else {
                 ALog.i(TAG, "onOutputBufferAvailable:" + index);

@@ -4,11 +4,13 @@ import android.support.annotation.NonNull;
 import android.text.TextUtils;
 
 import com.wilbert.library.clips.abs.IFrameWorker;
+import com.wilbert.library.clips.abs.IPreparedListener;
 import com.wilbert.library.clips.abs.IVideoClip;
-import com.wilbert.library.codecs.VideoExtractor;
-import com.wilbert.library.codecs.VideoExtractorWrapper;
+import com.wilbert.library.codecs.SvMediaExtractor;
+import com.wilbert.library.codecs.SvMediaExtractorWrapper;
 import com.wilbert.library.codecs.abs.FrameInfo;
 import com.wilbert.library.codecs.abs.IExtractorListener;
+import com.wilbert.library.codecs.abs.IVideoParams;
 import com.wilbert.library.log.ALog;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -19,9 +21,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * time   : 2020/04/26
  * desc   :
  */
-public class VideoClip implements IVideoClip, IFrameWorker {
+public class VideoClip implements IVideoClip, IVideoParams, IFrameWorker {
     private final String TAG = "VideoClip" + hashCode();
-    private VideoExtractorWrapper mExtractor;
+    private SvMediaExtractorWrapper mExtractor;
     private String mFilePath = null;
 
     public static final int STATUS_RELEASED = 0x00;
@@ -31,38 +33,52 @@ public class VideoClip implements IVideoClip, IFrameWorker {
     public static final int STATUS_PREPARED = 0x04;
 
     private AtomicInteger mStatus = new AtomicInteger(0);
+    private IPreparedListener mPreparedListener;
+    private Object mLock = new Object();
 
     public VideoClip() {
     }
 
     @Override
     public int getWidth() {
-        return 0;
+        if (mStatus.get() < STATUS_PREPARED)
+            return 0;
+        return mExtractor.getWidth();
     }
 
     @Override
     public int getHeight() {
-        return 0;
+        if (mStatus.get() < STATUS_PREPARED)
+            return 0;
+        return mExtractor.getHeight();
     }
 
     @Override
     public int getRotation() {
-        return 0;
+        if (mStatus.get() < STATUS_PREPARED)
+            return 0;
+        return mExtractor.getRotation();
     }
 
     @Override
     public int getFps() {
-        return 0;
+        if (mStatus.get() < STATUS_PREPARED)
+            return 0;
+        return mExtractor.getFps();
     }
 
     @Override
     public long getDuration() {
-        return 0;
+        if (mStatus.get() < STATUS_PREPARED)
+            return 0;
+        return mExtractor.getDuration();
     }
 
     @Override
     public int getBitrate() {
-        return 0;
+        if (mStatus.get() < STATUS_PREPARED)
+            return 0;
+        return mExtractor.getBitrate();
     }
 
     @Override
@@ -75,10 +91,17 @@ public class VideoClip implements IVideoClip, IFrameWorker {
             mExtractor.release();
         }
         mFilePath = filePath;
-        mExtractor = new VideoExtractorWrapper();
+        mExtractor = new SvMediaExtractorWrapper();
         mExtractor.setListener(extractorListener);
-        mExtractor.prepare(mFilePath, VideoExtractor.Type.VIDEO);
+        mExtractor.prepare(mFilePath, SvMediaExtractor.Type.VIDEO);
         mStatus.set(STATUS_IDLE);
+    }
+
+    @Override
+    public void setOnPreparedListener(IPreparedListener listener) {
+        synchronized (mLock) {
+            this.mPreparedListener = listener;
+        }
     }
 
     @Override
@@ -93,6 +116,13 @@ public class VideoClip implements IVideoClip, IFrameWorker {
     @Override
     public void speedUp(float speed) {
 
+    }
+
+    @Override
+    public String getFilepath() {
+        synchronized (mLock) {
+            return mFilePath;
+        }
     }
 
     @Override
@@ -131,18 +161,23 @@ public class VideoClip implements IVideoClip, IFrameWorker {
     public IExtractorListener extractorListener = new IExtractorListener() {
 
         @Override
-        public void onPrepared(VideoExtractorWrapper extractor) {
+        public void onPrepared(SvMediaExtractorWrapper extractor) {
             mStatus.set(STATUS_PREPARED);
             mExtractor.start();
+            synchronized (mLock) {
+                if (mPreparedListener != null) {
+                    mPreparedListener.onPrepared(extractor);
+                }
+            }
         }
 
         @Override
-        public void onReleased(VideoExtractorWrapper extractor) {
+        public void onReleased(SvMediaExtractorWrapper extractor) {
             mStatus.set(STATUS_RELEASED);
         }
 
         @Override
-        public void onError(VideoExtractorWrapper extractor, Throwable throwable) {
+        public void onError(SvMediaExtractorWrapper extractor, Throwable throwable) {
 
         }
     };

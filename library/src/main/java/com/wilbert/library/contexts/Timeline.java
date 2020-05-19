@@ -64,8 +64,16 @@ public class Timeline implements ITimeline {
             if (timeUs < 0)
                 timeUs = 0;
             long currentTime = SystemClock.elapsedRealtimeNanos();
+            long pausedPts = 0;
+            if (mPauseTime > mStartTime) {
+                pausedPts = mPauseTime - mStartTime;
+            }
             mStartTime = currentTime - timeUs * 1000;
-            mPauseTime = currentTime;
+            if (pausedPts > 0) {
+                mPauseTime = mStartTime + pausedPts;
+            } else {
+                mPauseTime = -1;
+            }
             return timeUs;
         }
     }

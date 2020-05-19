@@ -10,23 +10,13 @@ import com.wilbert.library.codecs.abs.FrameInfo;
  */
 public interface IVideoClip {
 
-    int getWidth();
-
-    int getHeight();
-
-    int getRotation();
-
-    int getFps();
-
-    long getDuration();
-
-    int getBitrate();
-
     void prepare(String filepath);
+
+    void setOnPreparedListener(IPreparedListener listener);
 
     void seekTo(long timeUs);
 
     void speedUp(float speed);
 
-    void release();
+    String getFilepath();
 }

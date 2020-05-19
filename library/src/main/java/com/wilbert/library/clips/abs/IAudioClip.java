@@ -9,13 +9,8 @@ package com.wilbert.library.clips.abs;
 public interface IAudioClip {
     void prepare(String filepath);
 
+    void setOnPreparedListener(IPreparedListener listener);
+
     String getFilepath();
 
-    int getChannels();
-
-    int getSampleRate();
-
-    long getDuration();
-
-    int getBitrate();
 }

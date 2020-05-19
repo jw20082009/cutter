@@ -3,16 +3,16 @@ package com.wilbert.library.codecs;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.support.annotation.NonNull;
-import android.telephony.SmsMessage;
 
 import com.wilbert.library.codecs.abs.FrameInfo;
+import com.wilbert.library.codecs.abs.IAudioParams;
 import com.wilbert.library.codecs.abs.IDecoder;
+import com.wilbert.library.codecs.abs.IVideoParams;
 import com.wilbert.library.codecs.abs.InputInfo;
 import com.wilbert.library.log.ALog;
 
 import java.io.IOException;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.TimeUnit;
 
 /**
  * author : Administrator
@@ -20,8 +20,8 @@ import java.util.concurrent.TimeUnit;
  * time   : 2020/04/26
  * desc   :
  */
-public class VideoDecoder implements IDecoder {
-    private final String TAG = "VideoDecoder";
+public class SvMediaDecoder implements IDecoder, IAudioParams, IVideoParams {
+    private final String TAG = "SvMediaDecoder";
     private MediaCodec mDecoder;
     private boolean mPrepared = false;
     private MediaFormat mInputFormat;
@@ -31,12 +31,14 @@ public class VideoDecoder implements IDecoder {
     private LinkedBlockingDeque<InputInfo> mInputBuffers = new LinkedBlockingDeque<>(10);
     private LinkedBlockingDeque<FrameInfo> mOutputBuffers = new LinkedBlockingDeque<>(10);
     private int mType = 0;//0:video;1:audio;
+    private int mFps = 0;
+    private int mBitRate = 0;
     private int mDecodeWidth = 0;
     private int mDecodeHeight = 0;
     private int mDecodeRotation = 0;
     private int mChannelCount = 0;
     private int mSampleRate = 0;
-
+    private long mDuration = 0;
     /**
      * care must be taken if the codec is flushed immediately or shortly
      * after start, before any output buffer or output format change has been returned, as the codec
@@ -45,7 +47,7 @@ public class VideoDecoder implements IDecoder {
      */
     private boolean mFlushEnable = false;
 
-    public VideoDecoder() {
+    public SvMediaDecoder() {
     }
 
     @Override
@@ -110,18 +112,17 @@ public class VideoDecoder implements IDecoder {
         }
         if (mCurrentInputInfo != null) {
             //保证外部必须先返回上一个buffer,才能取走下一个buffer
-            ALog.i(TAG, "dequeueInputBuffer same frame again");
+            //ALog.i(TAG, "dequeueInputBuffer same frame again");
             return null;
         }
-        ALog.i(TAG, "dequeueInputBuffer,type:" + mType);
         try {
             mCurrentInputInfo = mInputBuffers.takeLast();
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        if (mCurrentInputInfo != null) {
-            ALog.i(TAG, "dequeueInputBuffer:" + mCurrentInputInfo.time + ";bufferIndex:" + mCurrentInputInfo.inputIndex + ";inputSize:" + mInputBuffers.size() + ";" + mType);
-        }
+        //if (mCurrentInputInfo != null) {
+        //ALog.i(TAG, "dequeueInputBuffer:" + mCurrentInputInfo.time + ";bufferIndex:" + mCurrentInputInfo.inputIndex + ";inputSize:" + mInputBuffers.size() + ";" + mType);
+        //}
         return mCurrentInputInfo;
     }
 
@@ -129,7 +130,7 @@ public class VideoDecoder implements IDecoder {
     public void queueInputBuffer(InputInfo inputInfo) {
         if (mDecoder != null) {
             if (inputInfo != null) {
-                ALog.i(TAG, "queueInputBuffer,time:" + inputInfo.time + ";size:" + inputInfo.size + ";flag:" + inputInfo.lastFrameFlag + ";index:" + inputInfo.inputIndex + ";" + mType);
+                //ALog.i(TAG, "queueInputBuffer,time:" + inputInfo.time + ";size:" + inputInfo.size + ";flag:" + inputInfo.lastFrameFlag + ";index:" + inputInfo.inputIndex + ";" + mType);
                 mDecoder.queueInputBuffer(inputInfo.inputIndex, 0, inputInfo.size <= 0 ? 0 : inputInfo.size,
                         inputInfo.time <= 0 ? 0 : inputInfo.time, inputInfo.lastFrameFlag ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
                 if (mCurrentInputInfo != null && mCurrentInputInfo.inputIndex == inputInfo.inputIndex) {
@@ -148,7 +149,7 @@ public class VideoDecoder implements IDecoder {
         }
         if (mCurrentFrameInfo != null) {
             //保证外部必须先返回上一个buffer,才能取走下一个buffer
-            ALog.i(TAG, "dequeueOutputBuffer same frame again");
+            //ALog.i(TAG, "dequeueOutputBuffer same frame again");
             return null;
         }
         try {
@@ -156,9 +157,9 @@ public class VideoDecoder implements IDecoder {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        if (mCurrentFrameInfo != null) {
-            ALog.i(TAG, "dequeueOutputBuffer:" + mCurrentFrameInfo.presentationTimeUs + ";bufferIndex:" + mCurrentFrameInfo.outputIndex + ";" + mType);
-        }
+        //if (mCurrentFrameInfo != null) {
+        //ALog.i(TAG, "dequeueOutputBuffer:" + mCurrentFrameInfo.presentationTimeUs + ";bufferIndex:" + mCurrentFrameInfo.outputIndex + ";" + mType);
+        //}
         return mCurrentFrameInfo;
     }
 
@@ -166,7 +167,6 @@ public class VideoDecoder implements IDecoder {
     public void queueOutputBuffer(FrameInfo frameInfo) {
         if (mDecoder != null) {
             if (frameInfo != null) {
-                ALog.i(TAG, "releaseOutputBuffer:" + frameInfo.presentationTimeUs + ";bufferIndex:" + mCurrentFrameInfo.outputIndex + ";" + mType);
                 mDecoder.releaseOutputBuffer(frameInfo.outputIndex, false);
                 if (mCurrentFrameInfo != null && mCurrentFrameInfo.outputIndex == frameInfo.outputIndex) {
                     mCurrentFrameInfo = null;
@@ -183,18 +183,19 @@ public class VideoDecoder implements IDecoder {
         public void onInputBufferAvailable(@NonNull MediaCodec codec, int index) {
             if (index >= 0) {
                 try {
-                    ALog.i(TAG, "onInputBufferAvailable,index:" + index + ";" + mType);
+                    //ALog.i(TAG, "onInputBufferAvailable,index:" + index + ";" + mType);
                     mInputBuffers.putFirst(new InputInfo(index, codec.getInputBuffer(index)));
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-            } else
+            } else {
                 ALog.i(TAG, "onInputBufferAvailable:" + index);
+            }
         }
 
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
-            ALog.i(TAG, "onOutputBufferAvailable,index:" + index + ";" + mType);
+            //ALog.i(TAG, "onOutputBufferAvailable,index:" + index + ";" + mType);
             if (index >= 0 && mOutputFormat != null) {
                 FrameInfo frameInfo = null;
                 if (mType == 0) {
@@ -238,8 +239,54 @@ public class VideoDecoder implements IDecoder {
                     mChannelCount = mOutputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
                 if (mOutputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE))
                     mSampleRate = mOutputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE);
+                if (mOutputFormat.containsKey(MediaFormat.KEY_FRAME_RATE))
+                    mFps = mOutputFormat.getInteger(MediaFormat.KEY_FRAME_RATE);
+                if (mOutputFormat.containsKey(MediaFormat.KEY_BIT_RATE))
+                    mBitRate = mOutputFormat.getInteger(MediaFormat.KEY_BIT_RATE);
+                if (mOutputFormat.containsKey(MediaFormat.KEY_DURATION))
+                    mDuration = mOutputFormat.getLong(MediaFormat.KEY_DURATION);
             }
             mFlushEnable = true;
         }
     };
+
+    @Override
+    public long getDuration() {
+        return mDuration;
+    }
+
+    @Override
+    public int getWidth() {
+        return mDecodeWidth;
+    }
+
+    @Override
+    public int getHeight() {
+        return mDecodeHeight;
+    }
+
+    @Override
+    public int getRotation() {
+        return mDecodeRotation;
+    }
+
+    @Override
+    public int getFps() {
+        return mFps;
+    }
+
+    @Override
+    public int getBitrate() {
+        return mBitRate;
+    }
+
+    @Override
+    public int getSampleRate() {
+        return mSampleRate;
+    }
+
+    @Override
+    public int getChannels() {
+        return mChannelCount;
+    }
 }

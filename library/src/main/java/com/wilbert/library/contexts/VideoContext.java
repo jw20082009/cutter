@@ -14,7 +14,6 @@ import com.wilbert.library.log.ALog;
 
 import java.nio.FloatBuffer;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -32,7 +31,7 @@ public class VideoContext {
     private GLSurfaceView mSurfaceView;
     private IFrameWorker mWorker;
     private AtomicBoolean mPlaying = new AtomicBoolean(true);
-
+    private final int EMPTY_WAITING = 5_000;//us
     private final int FRAME_TIME = 33_333;//33ms一帧
     private int mSurfaceWidth, mSurfaceHeight;
     private int mProgramOut;
@@ -60,9 +59,21 @@ public class VideoContext {
         new Thread(mFrameWorker, "VideoContext_Worker").start();
     }
 
+    public void pause() {
+        ALog.i(TAG, "release");
+        synchronized (mSync) {
+            mFrameInfos.offerFirst(new FrameInfo(null, -1, -1, -1));
+            mRender.release();
+        }
+    }
+
     public void release() {
-        mPlaying.set(false);
-        mRender.release();
+        ALog.i(TAG, "release");
+        synchronized (mSync) {
+            mFrameInfos.offerFirst(new FrameInfo(null, -1, -1, -1));
+            mPlaying.set(false);
+            mRender.release();
+        }
     }
 
     private Runnable mFrameWorker = new Runnable() {
@@ -74,27 +85,25 @@ public class VideoContext {
             while (mPlaying.get()) {
                 if (mWorker != null) {
                     FrameInfo frameInfo = mWorker.getNextFrame();
-                    long timeElapse = -1;
-                    boolean needRender = false;
+                    long waiting = -1;
+                    if (mFirstFrame) {
+                        mTimeline.start();
+                        mFirstFrame = false;
+                    }
                     if (frameInfo != null) {
                         try {
                             mFrameInfos.putFirst(frameInfo);
-                            needRender = true;
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
-                        if (mFirstFrame) {
-                            mTimeline.start();
-                            mFirstFrame = false;
-                        }
-                        timeElapse = mTimeline.compareTime(frameInfo.presentationTimeUs);
+                        waiting = mTimeline.compareTime(frameInfo.presentationTimeUs);
                     } else {
-                        timeElapse = 10_000;
+                        waiting = EMPTY_WAITING;
                     }
-                    if (timeElapse > 0) {
+                    do {
                         try {
                             synchronized (mLock) {
-                                long timeWait = timeElapse / 1000;
+                                long timeWait = waiting / 1000;
                                 if (timeWait > 0) {
                                     mLock.wait(timeWait);
                                 }
@@ -102,8 +111,13 @@ public class VideoContext {
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
-                    }
-                    if (needRender)
+                        if (frameInfo != null) {
+                            waiting = mTimeline.compareTime(frameInfo.presentationTimeUs);
+                        } else {
+                            waiting = 0;
+                        }
+                    } while (waiting > 0);
+                    if (frameInfo != null)
                         mSurfaceView.requestRender();
                 } else {
                     ALog.i(TAG, "no worker and quit");
@@ -119,17 +133,18 @@ public class VideoContext {
         private final int STATUS_PREPARED = 0x01;
         private final int STATUS_RUNNING = 0x02;
         private final int STATUS_RELEASING = 0x03;
+        private final int STATUS_RELEASED = 0x04;
 
         private int mStatus = STATUS_IDLE;
         private IYuvRenderer mYuvRender;
 
         public VideoRenderer() {
             mYuvRender = new NV21Renderer();
-//            mYuvRender = new YUV420pRenderer();
         }
 
         @Override
         public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+            ALog.i(TAG, "onSurfaceCreated");
             mProgramOut = OpenGLUtils.createProgram(OpenGLUtils.getShaderFromAssets(mSurfaceView.getContext(),
                     "shader/base/vertex_normal.glsl"), OpenGLUtils.getShaderFromAssets(mSurfaceView.getContext(),
                     "shader/base/fragment_normal.glsl"));
@@ -142,11 +157,11 @@ public class VideoContext {
             mStatus = STATUS_PREPARED;
             GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-            ALog.i(TAG, "onSurfaceCreated");
         }
 
         @Override
         public void onSurfaceChanged(GL10 gl, int width, int height) {
+            ALog.i(TAG, "onSurfaceChanged");
             mSurfaceWidth = width;
             mSurfaceHeight = height;
             mYuvRender.onSurfaceChanged(width, height);
@@ -155,12 +170,7 @@ public class VideoContext {
 
         @Override
         public void onDrawFrame(GL10 gl) {
-            if (mStatus == STATUS_RELEASING) {
-                _release();
-                changeStatus(STATUS_IDLE);
-                ALog.i(TAG, "onDrawFrame when releasing");
-                return;
-            }
+            ALog.i(TAG, "onDrawFrame");
             if (mWorker == null) {
                 ALog.i(TAG, "onDrawFrame null worker");
                 return;
@@ -195,14 +205,26 @@ public class VideoContext {
         }
 
         private void _release() {
+            ALog.i(TAG, "mYuvRender.release()");
             if (mYuvRender != null) {
                 mYuvRender.release();
-                mYuvRender = null;
             }
         }
 
         public void release() {
+            ALog.i(TAG, "VideoRenderer release");
             changeStatus(STATUS_RELEASING);
+            mSurfaceView.queueEvent(new Runnable() {
+                @Override
+                public void run() {
+                    if (mStatus == STATUS_RELEASING) {
+                        _release();
+                        changeStatus(STATUS_RELEASED);
+                        ALog.i(TAG, "onDrawFrame when releasing");
+                        return;
+                    }
+                }
+            });
         }
 
         public void changeStatus(int status) {

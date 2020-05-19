@@ -1,6 +1,6 @@
 package com.wilbert.library.codecs.abs;
 
-import com.wilbert.library.codecs.VideoExtractorWrapper;
+import com.wilbert.library.codecs.SvMediaExtractorWrapper;
 
 /**
  * author : wilbert
@@ -10,9 +10,9 @@ import com.wilbert.library.codecs.VideoExtractorWrapper;
  */
 public interface IExtractorListener {
 
-    void onPrepared(VideoExtractorWrapper extractor);
+    void onPrepared(SvMediaExtractorWrapper extractor);
 
-    void onReleased(VideoExtractorWrapper extractor);
+    void onReleased(SvMediaExtractorWrapper extractor);
 
-    void onError(VideoExtractorWrapper extractor, Throwable throwable);
+    void onError(SvMediaExtractorWrapper extractor, Throwable throwable);
 }

@@ -16,28 +16,28 @@ import java.io.IOException;
  * time   : 2020/04/26
  * desc   :
  */
-public class VideoExtractor {
-    private final String TAG = "VideoExtractor";
+public class SvMediaExtractor {
+    private final String TAG = "SvMediaExtractor";
 
     public enum Type {
         AUDIO, VIDEO;
     }
 
     private final long mIgnoreTimeUs = 40000;//40ms
-    private MediaExtractor mExtractor;
+    private android.media.MediaExtractor mExtractor;
     private MediaFormat mFormat;
     private boolean mPrepared = false;
     private long mCurrentTimeUs = 0;
     private Type mType;
 
-    public VideoExtractor() {
+    public SvMediaExtractor() {
     }
 
     public boolean prepare(String filepath, Type type) throws IOException {
         if (TextUtils.isEmpty(filepath)) {
             throw new IOException("cannot prepare empty filepath");
         }
-        mExtractor = new MediaExtractor();
+        mExtractor = new android.media.MediaExtractor();
         mExtractor.setDataSource(filepath);
         for (int i = 0; i < this.mExtractor.getTrackCount(); ++i) {
             MediaFormat format = this.mExtractor.getTrackFormat(i);
@@ -56,7 +56,7 @@ public class VideoExtractor {
     }
 
     public boolean prepare(FileDescriptor descriptor, Type type) throws IOException {
-        mExtractor = new MediaExtractor();
+        mExtractor = new android.media.MediaExtractor();
         mExtractor.setDataSource(descriptor);
         for (int i = 0; i < this.mExtractor.getTrackCount(); ++i) {
             MediaFormat format = this.mExtractor.getTrackFormat(i);
@@ -104,7 +104,7 @@ public class VideoExtractor {
         long time = mCurrentTimeUs;
         int retryTimes = 10;
         do {
-            mExtractor.seekTo(timeUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC);
+            mExtractor.seekTo(timeUs, android.media.MediaExtractor.SEEK_TO_CLOSEST_SYNC);
             time = mExtractor.getSampleTime();
         } while (time < 0 && --retryTimes > 0);
         mCurrentTimeUs = time;

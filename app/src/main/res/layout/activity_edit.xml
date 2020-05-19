@@ -22,13 +22,20 @@
         android:textSize="14dp" />
 
     <TextView
+        android:id="@+id/btn_seek"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|left"
         android:layout_margin="10dp"
         android:background="@android:color/darker_gray"
         android:padding="10dp"
-        android:text="test"
+        android:text="seek"
         android:textColor="@android:color/white"
         android:textSize="14dp" />
+
+    <SeekBar
+        android:id="@+id/seekBar"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:background="#99272727"/>
 </FrameLayout>

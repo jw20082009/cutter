@@ -2,9 +2,7 @@ package com.wilbert.library.codecs.abs;
 
 import android.media.MediaFormat;
 
-import com.wilbert.library.codecs.VideoExtractor;
-
-import java.io.FileDescriptor;
+import com.wilbert.library.codecs.SvMediaExtractor;
 
 /**
  * author : wilbert
@@ -13,7 +11,7 @@ import java.io.FileDescriptor;
  * desc   :
  */
 public interface IExtractor {
-    void prepare(String filePath, VideoExtractor.Type type);
+    void prepare(String filePath, SvMediaExtractor.Type type);
 
     void start();
 
@@ -22,6 +20,8 @@ public interface IExtractor {
     void releaseFrameBuffer(FrameInfo frameInfo);
 
     void seekTo(long timeUs);
+
+    long getDuration();
 
     MediaFormat getMediaFormat();
 

@@ -11,7 +11,6 @@ import com.wilbert.library.contexts.abs.ITimeline;
 import com.wilbert.library.log.ALog;
 
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -29,6 +28,7 @@ public class AudioContext {
     private AudioTrack mAudioTrack;
     private boolean mPrepared = false;
     private int mSessionId = -1;
+    private final int EMPTY_WAITING = 5_000;//us
     private Object mLock = new Object();
 
     public AudioContext(IFrameWorker frameWorker, ITimeline timeline, int audioSessionId) {
@@ -40,7 +40,7 @@ public class AudioContext {
     }
 
     private Runnable mFrameRunnable = new Runnable() {
-        private boolean mFirstFrame = true;
+
 
         @Override
         public void run() {
@@ -48,30 +48,9 @@ public class AudioContext {
             while (mPlaying.get()) {
                 if (mWorker != null) {
                     FrameInfo frameInfo = mWorker.getNextFrame();
-                    long timeElapse = -1;
-                    boolean needRender = false;
                     if (frameInfo != null) {
                         try {
                             mFrameInfos.putFirst(frameInfo);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                        if (mFirstFrame) {
-                            mTimeline.start();
-                            mFirstFrame = false;
-                        }
-                        timeElapse = mTimeline.compareTime(frameInfo.presentationTimeUs);
-                    } else {
-                        timeElapse = 10_000;
-                    }
-                    if (timeElapse > 0) {
-                        try {
-                            synchronized (mLock) {
-                                long timeWait = timeElapse / 1000;
-                                if (timeWait > 0) {
-                                    mLock.wait(timeWait);
-                                }
-                            }
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
@@ -85,6 +64,8 @@ public class AudioContext {
     };
 
     private Runnable mRenderRunnable = new Runnable() {
+        private boolean mFirstFrame = true;
+
         @Override
         public void run() {
             while (mPlaying.get()) {
@@ -98,8 +79,26 @@ public class AudioContext {
                     ALog.i(TAG, "renderer null frameInfo");
                     continue;
                 }
+                if (mFirstFrame) {
+                    mTimeline.start();
+                    mFirstFrame = false;
+                }
                 if (!mPrepared) {
                     initAudioTrack(frameInfo);
+                }
+                long waiting = mTimeline.compareTime(frameInfo.presentationTimeUs);
+                while (waiting > 0) {
+                    try {
+                        synchronized (mLock) {
+                            long timeWait = waiting / 1000;
+                            if (timeWait > 0) {
+                                mLock.wait(timeWait);
+                            }
+                        }
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    waiting = mTimeline.compareTime(frameInfo.presentationTimeUs);
                 }
                 playAudio(frameInfo);
                 mWorker.releaseFrame(frameInfo);
@@ -130,7 +129,7 @@ public class AudioContext {
         }
         try {
             mAudioTrack.play();
-            mAudioTrack.write(frameInfo.outputBuffer, frameInfo.size, AudioTrack.WRITE_BLOCKING/*one of {@link #WRITE_BLOCKING}, {@link #WRITE_NON_BLOCKING}. It has no effect in static mode.*/);
+            mAudioTrack.write(frameInfo.outputBuffer, frameInfo.size, AudioTrack.WRITE_NON_BLOCKING/*one of {@link #WRITE_BLOCKING}, {@link #WRITE_NON_BLOCKING}. It has no effect in static mode.*/);
         } catch (IllegalStateException e) {
             e.printStackTrace();
         }
@@ -155,7 +154,8 @@ public class AudioContext {
         if (!mPlaying.get())
             return;
         mPlaying.set(false);
-        if (mFrameInfos != null)
+        if (mFrameInfos != null) {
             mFrameInfos.offer(new FrameInfo(null, -1, -1, -1));
+        }
     }
 }

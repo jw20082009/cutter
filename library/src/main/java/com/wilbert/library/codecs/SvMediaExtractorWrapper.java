@@ -8,18 +8,14 @@ import android.os.Message;
 import android.text.TextUtils;
 
 import com.wilbert.library.codecs.abs.FrameInfo;
-import com.wilbert.library.codecs.abs.IDecoder;
+import com.wilbert.library.codecs.abs.IAudioParams;
 import com.wilbert.library.codecs.abs.IExtractor;
 import com.wilbert.library.codecs.abs.IExtractorListener;
+import com.wilbert.library.codecs.abs.IVideoParams;
 import com.wilbert.library.codecs.abs.InputInfo;
-import com.wilbert.library.contexts.VideoContext;
-import com.wilbert.library.log.ALog;
 
-import java.io.FileDescriptor;
 import java.io.IOException;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -28,8 +24,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * time   : 2020/04/26
  * desc   :
  */
-public class VideoExtractorWrapper implements IExtractor {
-    private final String TAG = "ExtractorWrapper";
+public class SvMediaExtractorWrapper implements IExtractor, IAudioParams, IVideoParams {
+    private final String TAG = "SvMediaExtractorWrapper";
 
     public static int STATUS_RELEASED = 0x00;
     public static int STATUS_RELEASING = 0x01;
@@ -42,23 +38,32 @@ public class VideoExtractorWrapper implements IExtractor {
 
     private AtomicInteger mStatus = new AtomicInteger(STATUS_RELEASED);
 
-    private VideoExtractor mExtractor;
+    private SvMediaExtractor mExtractor;
     private MediaFormat mFormat;
     private ExtractorHandler mHandler;
     private DecodeHandler mDecodeHandler;
     private IExtractorListener mListener;
     private String mFilePath = null;
 
-    private IDecoder mDecoder;
+    private int mFps = 0;
+    private int mBitRate = 0;
+    private int mWidth = 0;
+    private int mHeight = 0;
+    private int mRotation = 0;
+    private int mChannelCount = 0;
+    private int mSampleRate = 0;
+    private long mDuration = 0;
+
+    private SvMediaDecoder mDecoder;
     private Semaphore mReleasePhore = new Semaphore(2);
     private Semaphore mDecodePhore = new Semaphore(0);
     private Object mLock = new Object();
 
-    public VideoExtractorWrapper() {
+    public SvMediaExtractorWrapper() {
     }
 
     @Override
-    public void prepare(String filePath, VideoExtractor.Type type) {
+    public void prepare(String filePath, SvMediaExtractor.Type type) {
         if (mStatus.get() >= STATUS_PREPARING)
             return;
         mStatus.set(STATUS_PREPARING);
@@ -118,6 +123,51 @@ public class VideoExtractorWrapper implements IExtractor {
     }
 
     @Override
+    public long getDuration() {
+        long result = mDuration;
+        if (mDecoder != null) {
+            result = mDecoder.getDuration();
+        }
+        return result > 0 ? result : mDuration;
+    }
+
+    @Override
+    public int getWidth() {
+        int result = mWidth;
+        if (mDecoder != null) {
+            result = mDecoder.getWidth();
+        }
+        return result > 0 ? result : mWidth;
+    }
+
+    @Override
+    public int getHeight() {
+        int result = mHeight;
+        if (mDecoder != null) {
+            result = mDecoder.getHeight();
+        }
+        return result > 0 ? result : mHeight;
+    }
+
+    @Override
+    public int getRotation() {
+        int result = mRotation;
+        if (mDecoder != null) {
+            result = mDecoder.getRotation();
+        }
+        return result > 0 ? result : mRotation;
+    }
+
+    @Override
+    public int getFps() {
+        int result = mFps;
+        if (mDecoder != null) {
+            result = mDecoder.getFps();
+        }
+        return result > 0 ? result : mFps;
+    }
+
+    @Override
     public MediaFormat getMediaFormat() {
         if (mStatus.get() < STATUS_PREPARED) {
             return null;
@@ -170,6 +220,33 @@ public class VideoExtractorWrapper implements IExtractor {
 
     private boolean firstFrame = true;
 
+    @Override
+    public int getBitrate() {
+        int result = mBitRate;
+        if (mDecoder != null) {
+            result = mDecoder.getBitrate();
+        }
+        return result > 0 ? result : mBitRate;
+    }
+
+    @Override
+    public int getSampleRate() {
+        int result = mSampleRate;
+        if (mDecoder != null) {
+            result = mDecoder.getSampleRate();
+        }
+        return result > 0 ? result : mSampleRate;
+    }
+
+    @Override
+    public int getChannels() {
+        int result = mChannelCount;
+        if (mDecoder != null) {
+            result = mDecoder.getChannels();
+        }
+        return result > 0 ? result : mChannelCount;
+    }
+
     class ExtractorHandler extends Handler {
 
         public ExtractorHandler(Looper looper) {
@@ -185,15 +262,35 @@ public class VideoExtractorWrapper implements IExtractor {
                         mExtractor.release();
                     }
                     try {
-                        mExtractor = new VideoExtractor();
+                        mExtractor = new SvMediaExtractor();
                         mStatus.set(STATUS_PREPARING_EXTRACTOR);
                         if (!TextUtils.isEmpty(mFilePath)) {
-                            mExtractor.prepare(mFilePath, (VideoExtractor.Type) msg.obj);
+                            mExtractor.prepare(mFilePath, (SvMediaExtractor.Type) msg.obj);
                         } else {
                             return;
                         }
                         try {
-                            mFormat = mExtractor.getMediaFormat();
+                            synchronized (mLock) {
+                                mFormat = mExtractor.getMediaFormat();
+                                if (mFormat != null) {
+                                    if (mFormat.containsKey(MediaFormat.KEY_WIDTH))
+                                        mWidth = mFormat.getInteger(MediaFormat.KEY_WIDTH);
+                                    if (mFormat.containsKey(MediaFormat.KEY_HEIGHT))
+                                        mHeight = mFormat.getInteger(MediaFormat.KEY_HEIGHT);
+                                    if (mFormat.containsKey(MediaFormat.KEY_ROTATION))
+                                        mRotation = mFormat.getInteger(MediaFormat.KEY_ROTATION);
+                                    if (mFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT))
+                                        mChannelCount = mFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
+                                    if (mFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE))
+                                        mSampleRate = mFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE);
+                                    if (mFormat.containsKey(MediaFormat.KEY_FRAME_RATE))
+                                        mFps = mFormat.getInteger(MediaFormat.KEY_FRAME_RATE);
+                                    if (mFormat.containsKey(MediaFormat.KEY_BIT_RATE))
+                                        mBitRate = mFormat.getInteger(MediaFormat.KEY_BIT_RATE);
+                                    if (mFormat.containsKey(MediaFormat.KEY_DURATION))
+                                        mDuration = mFormat.getLong(MediaFormat.KEY_DURATION);
+                                }
+                            }
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -262,7 +359,7 @@ public class VideoExtractorWrapper implements IExtractor {
             switch (msg.what) {
                 case MSG_PREPARE_DECODER:
                     try {
-                        mDecoder = new VideoDecoder();
+                        mDecoder = new SvMediaDecoder();
                         mStatus.set(STATUS_PREPARING_DECODER);
                         mDecodePhore.acquire();
                         if (mFormat != null) {
@@ -299,7 +396,7 @@ public class VideoExtractorWrapper implements IExtractor {
     private void notifyPrepared() {
         synchronized (mLock) {
             if (mListener != null) {
-                mListener.onPrepared(VideoExtractorWrapper.this);
+                mListener.onPrepared(SvMediaExtractorWrapper.this);
             }
         }
     }
@@ -307,7 +404,7 @@ public class VideoExtractorWrapper implements IExtractor {
     private void notifyonError(Throwable throwable) {
         synchronized (mLock) {
             if (mListener != null) {
-                mListener.onError(VideoExtractorWrapper.this, throwable);
+                mListener.onError(SvMediaExtractorWrapper.this, throwable);
             }
         }
     }
@@ -315,7 +412,7 @@ public class VideoExtractorWrapper implements IExtractor {
     private void notifyReleased() {
         synchronized (mLock) {
             if (mListener != null) {
-                mListener.onReleased(VideoExtractorWrapper.this);
+                mListener.onReleased(SvMediaExtractorWrapper.this);
             }
         }
     }

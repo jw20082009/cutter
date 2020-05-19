@@ -170,7 +170,6 @@ public class VideoContext {
 
         @Override
         public void onDrawFrame(GL10 gl) {
-            ALog.i(TAG, "onDrawFrame");
             if (mWorker == null) {
                 ALog.i(TAG, "onDrawFrame null worker");
                 return;
